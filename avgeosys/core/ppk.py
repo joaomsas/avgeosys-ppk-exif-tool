@@ -73,13 +73,13 @@ def process_single_folder(
     )
 
     # Oculta janela no Windows
-    # type: ignore[attr-defined]
-    si = subprocess.STARTUPINFO()
+    si = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
     if si:
-        # type: ignore[attr-defined]
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        # type: ignore[attr-defined]
-        si.wShowWindow = subprocess.SW_HIDE
+        # obtém estilo de janela (ignorado pelo mypy)
+        flag = subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
+        si.dwFlags |= flag
+        hide = subprocess.SW_HIDE  # type: ignore[attr-defined]
+        si.wShowWindow = hide
 
     subprocess.run(
         cmd,
