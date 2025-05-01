@@ -73,10 +73,10 @@ def process_single_folder(
     )
 
     # Oculta janela no Windows
-    si = subprocess.STARTUPINFO() if os.name == "nt" else None
+    si = subprocess.STARTUPINFO() if os.name == "nt" else None  # type: ignore[attr-defined]
     if si:
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = subprocess.SW_HIDE
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
+        si.wShowWindow = subprocess.SW_HIDE              # type: ignore[attr-defined]
 
     subprocess.run(
         cmd,

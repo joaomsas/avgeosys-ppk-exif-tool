@@ -5,7 +5,7 @@ Módulo de geotagging e geração de KMZ via EXIF.
 import logging
 from pathlib import Path
 from math import floor
-from typing import Tuple, List, Dict
+from typing import Tuple, List, Dict, Optional
 
 import piexif
 import simplekml
@@ -95,7 +95,7 @@ def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
 
 def generate_exif_kmz(
     root_folder: Path,
-    kmz_path: Path = None,
+    kmz_path: Optional[Path] = None,
 ) -> Path:
     """
     Gera KMZ com pontos EXIF extraídos em root_folder.
