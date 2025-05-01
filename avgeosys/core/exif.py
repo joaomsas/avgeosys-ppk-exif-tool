@@ -1,6 +1,7 @@
 """
 Módulo de geotagging e geração de KMZ via EXIF.
 """
+
 import logging
 import json
 from pathlib import Path
@@ -10,24 +11,29 @@ from typing import Tuple, List, Dict
 import piexif
 import simplekml
 
-def convert_to_dms(value: float) -> Tuple[Tuple[int,int], Tuple[int,int], Tuple[int,int]]:
+
+def convert_to_dms(
+    value: float,
+) -> Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int]]:
     deg = floor(abs(value))
     mn = floor((abs(value) - deg) * 60)
-    sec = round((abs(value) - deg - mn/60) * 3600, 5)
-    return ((deg,1), (mn,1), (int(sec*100),100))
+    sec = round((abs(value) - deg - mn / 60) * 3600, 5)
+    return ((deg, 1), (mn, 1), (int(sec * 100), 100))
+
 
 def convert_from_dms(dms, ref: str) -> float:
     try:
-        deg = dms[0][0]/dms[0][1]
-        mn  = dms[1][0]/dms[1][1]
-        sc  = dms[2][0]/dms[2][1]
-        dec = deg + mn/60 + sc/3600
-        if ref in ['S','W']:
+        deg = dms[0][0] / dms[0][1]
+        mn = dms[1][0] / dms[1][1]
+        sc = dms[2][0] / dms[2][1]
+        dec = deg + mn / 60 + sc / 3600
+        if ref in ["S", "W"]:
             dec = -dec
         return dec
     except Exception as e:
         logging.error(f"Erro em convert_from_dms: {e}")
         return 0.0
+
 
 def update_exif(photo_path: Path, lat: float, lon: float, height: float) -> None:
     """
@@ -37,11 +43,12 @@ def update_exif(photo_path: Path, lat: float, lon: float, height: float) -> None
         exif_dict = piexif.load(str(photo_path))
         exif_dict["GPS"][piexif.GPSIFD.GPSLatitude] = convert_to_dms(lat)
         exif_dict["GPS"][piexif.GPSIFD.GPSLongitude] = convert_to_dms(lon)
-        exif_dict["GPS"][piexif.GPSIFD.GPSAltitude] = (int(height*100),100)
+        exif_dict["GPS"][piexif.GPSIFD.GPSAltitude] = (int(height * 100), 100)
         piexif.insert(piexif.dump(exif_dict), str(photo_path))
         logging.info(f"EXIF atualizado: {photo_path.name}")
     except Exception as e:
         logging.error(f"Erro ao atualizar EXIF {photo_path.name}: {e}")
+
 
 def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
     """
@@ -50,23 +57,31 @@ def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
     results: List[Dict] = []
     for img in root_folder.rglob("*.jpg"):
         try:
-            gps = piexif.load(str(img)).get("GPS",{})
+            gps = piexif.load(str(img)).get("GPS", {})
             lat = gps.get(piexif.GPSIFD.GPSLatitude)
             lon = gps.get(piexif.GPSIFD.GPSLongitude)
             alt = gps.get(piexif.GPSIFD.GPSAltitude)
-            lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef,b'N').decode()
-            lon_ref = gps.get(piexif.GPSIFD.GPSLongitudeRef,b'E').decode()
+            lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef, b"N").decode()
+            lon_ref = gps.get(piexif.GPSIFD.GPSLongitudeRef, b"E").decode()
             if lat and lon:
                 dec_lat = convert_from_dms(lat, lat_ref)
                 dec_lon = convert_from_dms(lon, lon_ref)
-                dec_alt = alt[0]/alt[1] if alt else None
-                results.append({"lat": dec_lat, "lon": dec_lon, "height": dec_alt, "filename": str(img)})
+                dec_alt = alt[0] / alt[1] if alt else None
+                results.append(
+                    {
+                        "lat": dec_lat,
+                        "lon": dec_lon,
+                        "height": dec_alt,
+                        "filename": str(img),
+                    }
+                )
         except Exception as e:
             logging.warning(f"Falha ao ler EXIF {img.name}: {e}")
     logging.info(f"EXIF extraído: {len(results)} imagens processadas.")
     return results
 
-def generate_exif_kmz(root_folder: Path, kmz_path: Path=None) -> Path:
+
+def generate_exif_kmz(root_folder: Path, kmz_path: Path = None) -> Path:
     """
     Gera KMZ com pontos EXIF extraídos em root_folder.
     """

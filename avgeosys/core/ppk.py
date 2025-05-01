@@ -1,6 +1,7 @@
 """
 Módulo de processamento PPK usando RTKLIB.
 """
+
 import os
 import subprocess
 import logging
@@ -9,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple, Optional
 
 from avgeosys.config import RINEX2RTKP_PATH
+
 
 def find_base_files(root_folder: Path) -> Tuple[Path, Path]:
     """
@@ -19,7 +21,9 @@ def find_base_files(root_folder: Path) -> Tuple[Path, Path]:
     obs_candidates = list(root_folder.glob("*[0-9][0-9]O"))
     nav_candidates = list(root_folder.glob("*[0-9][0-9]P"))
     if not obs_candidates or not nav_candidates:
-        raise FileNotFoundError(f"Arquivos base (YYO e YYP) não encontrados em {root_folder}")
+        raise FileNotFoundError(
+            f"Arquivos base (YYO e YYP) não encontrados em {root_folder}"
+        )
 
     def year_from_path(path: Path) -> int:
         try:
@@ -29,8 +33,11 @@ def find_base_files(root_folder: Path) -> Tuple[Path, Path]:
 
     base_obs = max(obs_candidates, key=year_from_path)
     base_nav = max(nav_candidates, key=year_from_path)
-    logging.info(f"Selecionados arquivos base: OBS={base_obs.name}, NAV={base_nav.name}")
+    logging.info(
+        f"Selecionados arquivos base: OBS={base_obs.name}, NAV={base_nav.name}"
+    )
     return base_obs, base_nav
+
 
 def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
     """
@@ -48,15 +55,16 @@ def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
     pos_output = output_dir / f"{rover_obs.stem}_PPKOBS.pos"
     cmd = [
         str(RINEX2RTKP_PATH),
-        "-o", str(pos_output),
+        "-o",
+        str(pos_output),
         str(rover_obs),
         str(base_obs),
-        str(base_nav)
+        str(base_nav),
     ]
     logging.debug(f"Executando comando PPK: {' '.join(cmd)}")
 
     # Oculta janela no Windows
-    si = subprocess.STARTUPINFO() if os.name == 'nt' else None
+    si = subprocess.STARTUPINFO() if os.name == "nt" else None
     if si:
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         si.wShowWindow = subprocess.SW_HIDE
@@ -66,9 +74,10 @@ def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT,
-        startupinfo=si
+        startupinfo=si,
     )
     return pos_output
+
 
 def process_all_folders(root_folder: Path, max_workers: Optional[int] = None) -> None:
     """
@@ -83,7 +92,11 @@ def process_all_folders(root_folder: Path, max_workers: Optional[int] = None) ->
         for folder, _, files in os.walk(root_folder):
             if any(f.endswith("_Timestamp.MRK") for f in files):
                 folder_path = Path(folder)
-                futures[executor.submit(process_single_folder, folder_path, base_obs, base_nav)] = folder_path
+                futures[
+                    executor.submit(
+                        process_single_folder, folder_path, base_obs, base_nav
+                    )
+                ] = folder_path
 
         for future in as_completed(futures):
             folder_path = futures[future]
