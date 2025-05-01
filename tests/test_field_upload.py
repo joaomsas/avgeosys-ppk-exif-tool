@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from avgeosys.core.fieldupload import field_upload
 
+
 def touch(p: Path):
     p.write_text("conteúdo qualquer")
 
@@ -10,11 +11,10 @@ def touch(p: Path):
 def setup_env(tmp_path):
     root = tmp_path
 
-    # cria PPK_Results para remoção
-    (root / "sub1" / "PPK_Results").mkdir(parents=True)
+    # cria PPK_Results para remoção\    (root / "sub1" / "PPK_Results").mkdir(parents=True)
 
     # cria arquivos base .B, .O, .P com sufixos 20 e 21
-    for ext in ("B", "O", "P"):
+    for ext in ("B", "O", "P"):    
         touch(root / f"site.20{ext}")
         touch(root / f"site.21{ext}")
 
@@ -25,6 +25,7 @@ def setup_env(tmp_path):
 
     return root, fotos
 
+
 def test_field_upload_happy_path(setup_env):
     root, fotos = setup_env
     zip_path = field_upload(root)
@@ -33,19 +34,15 @@ def test_field_upload_happy_path(setup_env):
     assert not (root / "sub1" / "PPK_Results").exists()
 
     # Zip deve existir na pasta de fotos
-    assert zip_path.exists() and zip_path.parent == fotos
+    assert zip_path.exists()
+    assert zip_path.parent == fotos
 
-    # Conteúdo do ZIP inclui .B, .O e .P
+    # Conteúdo do ZIP inclui arquivos com sufixos B, O e P
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
-        assert any(name.endswith(".B") for name in names)
-        assert any(name.endswith(".O") for name in names)
-        assert any(name.endswith(".P") for name in names)
-        # como os arquivos têm nomes como "site.21B", basta checar o sufixo em 'B','O','P'
         for ext in ("B", "O", "P"):
-            assert any(name.endswith(ext) for name in names), (
+            assert any(name.endswith(ext) for name in names), \
                 f"ZIP não contém arquivo com extensão {ext}"
-            )
 
     # Arquivos base originais devem ter sido apagados
     assert not any(root.glob("*.B"))
@@ -53,12 +50,13 @@ def test_field_upload_happy_path(setup_env):
     assert not any(root.glob("*.P"))
 
     # Arquivos de relatório/KMZ não devem existir
-    for fn in [
+    for fn in (
         "compilado_exif_data.kmz",
         "relatorio_processamento.txt",
         "resultado_interpolado.kmz",
-    ]:
+    ):
         assert not (root / fn).exists()
+
 
 def test_field_upload_no_photos(tmp_path):
     root = tmp_path
@@ -68,3 +66,4 @@ def test_field_upload_no_photos(tmp_path):
     # sem pasta de fotos, deve falhar
     with pytest.raises(FileNotFoundError):
         field_upload(root)
+
