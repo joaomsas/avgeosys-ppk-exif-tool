@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from typing import List
 
+
 def field_upload(root_folder: Path) -> Path:
     """
     Remove todas as pastas 'PPK_Results' em root_folder,
@@ -35,7 +36,9 @@ def field_upload(root_folder: Path) -> Path:
         None,
     )
     if not first_sub:
-        raise FileNotFoundError("Nenhuma subpasta com fotos processadas encontrada.")
+        raise FileNotFoundError(
+            "Nenhuma subpasta com fotos processadas encontrada."
+        )
 
     # 4) Gera o ZIP dos arquivos base
     zip_path = first_sub / "base_rinex.zip"
