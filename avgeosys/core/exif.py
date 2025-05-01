@@ -3,7 +3,6 @@ Módulo de geotagging e geração de KMZ via EXIF.
 """
 
 import logging
-import json
 from pathlib import Path
 from math import floor
 from typing import Tuple, List, Dict
@@ -35,7 +34,12 @@ def convert_from_dms(dms, ref: str) -> float:
         return 0.0
 
 
-def update_exif(photo_path: Path, lat: float, lon: float, height: float) -> None:
+def update_exif(
+    photo_path: Path,
+    lat: float,
+    lon: float,
+    height: float,
+) -> None:
     """
     Atualiza EXIF GPS de uma foto específica.
     """
@@ -55,42 +59,58 @@ def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
     Extrai coordenadas GPS de todas as .jpg em root_folder via EXIF.
     """
     results: List[Dict] = []
+
     for img in root_folder.rglob("*.jpg"):
         try:
-            gps = piexif.load(str(img)).get("GPS", {})
-            lat = gps.get(piexif.GPSIFD.GPSLatitude)
-            lon = gps.get(piexif.GPSIFD.GPSLongitude)
-            alt = gps.get(piexif.GPSIFD.GPSAltitude)
-            lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef, b"N").decode()
-            lon_ref = gps.get(piexif.GPSIFD.GPSLongitudeRef, b"E").decode()
+            gps_data = piexif.load(str(img)).get("GPS", {})
+            lat = gps_data.get(piexif.GPSIFD.GPSLatitude)
+            lon = gps_data.get(piexif.GPSIFD.GPSLongitude)
+            alt = gps_data.get(piexif.GPSIFD.GPSAltitude)
+            lat_ref = gps_data.get(
+                piexif.GPSIFD.GPSLatitudeRef, b"N"
+            ).decode()
+            lon_ref = gps_data.get(
+                piexif.GPSIFD.GPSLongitudeRef, b"E"
+            ).decode()
+
             if lat and lon:
                 dec_lat = convert_from_dms(lat, lat_ref)
                 dec_lon = convert_from_dms(lon, lon_ref)
                 dec_alt = alt[0] / alt[1] if alt else None
-                results.append(
-                    {
-                        "lat": dec_lat,
-                        "lon": dec_lon,
-                        "height": dec_alt,
-                        "filename": str(img),
-                    }
-                )
+
+                results.append({
+                    "lat": dec_lat,
+                    "lon": dec_lon,
+                    "height": dec_alt,
+                    "filename": str(img),
+                })
         except Exception as e:
             logging.warning(f"Falha ao ler EXIF {img.name}: {e}")
-    logging.info(f"EXIF extraído: {len(results)} imagens processadas.")
+
+    logging.info(
+        f"EXIF extraído: {len(results)} imagens processadas."
+    )
     return results
 
 
-def generate_exif_kmz(root_folder: Path, kmz_path: Path = None) -> Path:
+def generate_exif_kmz(
+    root_folder: Path,
+    kmz_path: Path = None,
+) -> Path:
     """
     Gera KMZ com pontos EXIF extraídos em root_folder.
     """
     data = extract_exif_coordinates(root_folder)
+
     if kmz_path is None:
         kmz_path = root_folder / "compilado_exif_data.kmz"
+
     kml = simplekml.Kml()
     for pt in data:
         kml.newpoint(coords=[(pt["lon"], pt["lat"])])
+
     kml.savekmz(str(kmz_path))
-    logging.info(f"KMZ de EXIF salvo em {kmz_path.name}")
+    logging.info(
+        f"KMZ de EXIF salvo em {kmz_path.name}"
+    )
     return kmz_path

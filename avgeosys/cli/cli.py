@@ -8,11 +8,7 @@ import logging
 from pathlib import Path
 
 from avgeosys import __version__
-from avgeosys.core.ppk import (
-    find_base_files,
-    process_all_folders,
-    process_single_folder,
-)
+from avgeosys.core.ppk import process_all_folders
 from avgeosys.core.interpolator import (
     preprocess_and_read_mrk,
     load_pos_data,
@@ -24,7 +20,10 @@ from avgeosys.core.report import generate_report_and_kmz
 
 def setup_logging(debug: bool):
     level = logging.DEBUG if debug else logging.INFO
-    logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=level)
+    logging.basicConfig(
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        level=level,
+    )
 
 
 def cmd_ppk(path: Path):
@@ -44,9 +43,12 @@ def cmd_interpolate(path: Path):
         if mrk_df.empty or pos_df.empty:
             continue
         interp = interpolate_positions(pos_df, mrk_df)
-        with open(rd / "interpolated_data.json", "w") as f:
+        output_file = rd / "interpolated_data.json"
+        with open(output_file, "w") as f:
             json.dump(interp, f, indent=4)
-        logging.info(f"Interpolação salva em {rd/'interpolated_data.json'}")
+        logging.info(
+            f"Interpolação salva em {output_file}"
+        )
 
 
 def cmd_geotag(path: Path):
@@ -60,8 +62,8 @@ def cmd_geotag(path: Path):
             photo = next(rd.parent.glob(f"*{e['photo']}"), None)
             if photo:
                 update_exif(photo, e["lat"], e["lon"], e["height"])
-    kmz = generate_exif_kmz(path)
-    logging.info(f"KMZ de EXIF: {kmz}")
+    kmz_path = generate_exif_kmz(path)
+    logging.info(f"KMZ de EXIF: {kmz_path}")
 
 
 def cmd_report(path: Path):
@@ -72,25 +74,56 @@ def cmd_report(path: Path):
 
 def main():
     p = argparse.ArgumentParser(
-        prog="avgeosys", description="AVGeoSys - PPK & EXIF Tool"
+        prog="avgeosys",
+        description="AVGeoSys - PPK & EXIF Tool",
     )
-    p.add_argument("path", type=Path, help="Diretório raiz do projeto")
-    p.add_argument("--version", action="version", version=__version__)
-    p.add_argument("--ppk", action="store_true", help="Processamento PPK")
     p.add_argument(
-        "--interpolate", action="store_true", help="Interpolação de posições"
+        "path",
+        type=Path,
+        help="Diretório raiz do projeto",
     )
-    p.add_argument("--geotag", action="store_true", help="Atualizar EXIF e gerar KMZ")
-    p.add_argument("--report", action="store_true", help="Gerar relatório de PPK")
-    p.add_argument("--all", action="store_true", help="Executar todas as etapas")
-    p.add_argument("--verbose", action="store_true", help="Logs em DEBUG")
+    p.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+    )
+    p.add_argument(
+        "--ppk",
+        action="store_true",
+        help="Processamento PPK",
+    )
+    p.add_argument(
+        "--interpolate",
+        action="store_true",
+        help="Interpolação de posições",
+    )
+    p.add_argument(
+        "--geotag",
+        action="store_true",
+        help="Atualizar EXIF e gerar KMZ",
+    )
+    p.add_argument(
+        "--report",
+        action="store_true",
+        help="Gerar relatório de PPK",
+    )
+    p.add_argument(
+        "--all",
+        action="store_true",
+        help="Executar todas as etapas",
+    )
+    p.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Logs em DEBUG",
+    )
     args = p.parse_args()
 
     setup_logging(args.verbose)
 
     if args.all or args.ppk:
         cmd_ppk(args.path)
-    if args.all or args.interpolate:
+    if args.all or args.interpretate:
         cmd_interpolate(args.path)
     if args.all or args.geotag:
         cmd_geotag(args.path)

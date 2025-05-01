@@ -12,7 +12,9 @@ from typing import Tuple, Optional
 from avgeosys.config import RINEX2RTKP_PATH
 
 
-def find_base_files(root_folder: Path) -> Tuple[Path, Path]:
+def find_base_files(
+    root_folder: Path,
+) -> Tuple[Path, Path]:
     """
     Busca arquivos base de observações (sufixo 'YYO') e efemérides ('YYP'),
     selecionando automaticamente os de maior ano disponível.
@@ -34,12 +36,17 @@ def find_base_files(root_folder: Path) -> Tuple[Path, Path]:
     base_obs = max(obs_candidates, key=year_from_path)
     base_nav = max(nav_candidates, key=year_from_path)
     logging.info(
-        f"Selecionados arquivos base: OBS={base_obs.name}, NAV={base_nav.name}"
+        f"Selecionados arquivos base: OBS={base_obs.name}, "
+        f"NAV={base_nav.name}"
     )
     return base_obs, base_nav
 
 
-def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
+def process_single_folder(
+    folder: Path,
+    base_obs: Path,
+    base_nav: Path,
+) -> Path:
     """
     Executa o processamento PPK em uma única subpasta usando rnx2rtkp.
     Gera o arquivo .pos em folder/PPK_Results.
@@ -61,7 +68,9 @@ def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
         str(base_obs),
         str(base_nav),
     ]
-    logging.debug(f"Executando comando PPK: {' '.join(cmd)}")
+    logging.debug(
+        f"Executando comando PPK: {' '.join(cmd)}"
+    )
 
     # Oculta janela no Windows
     si = subprocess.STARTUPINFO() if os.name == "nt" else None
@@ -79,9 +88,13 @@ def process_single_folder(folder: Path, base_obs: Path, base_nav: Path) -> Path:
     return pos_output
 
 
-def process_all_folders(root_folder: Path, max_workers: Optional[int] = None) -> None:
+def process_all_folders(
+    root_folder: Path,
+    max_workers: Optional[int] = None,
+) -> None:
     """
-    Processa todas as subpastas em root_folder que contenham arquivos _Timestamp.MRK.
+    Processa todas as subpastas em root_folder que contenham
+    arquivos _Timestamp.MRK.
     Paraleliza via ThreadPoolExecutor.
     """
     base_obs, base_nav = find_base_files(root_folder)
@@ -94,7 +107,10 @@ def process_all_folders(root_folder: Path, max_workers: Optional[int] = None) ->
                 folder_path = Path(folder)
                 futures[
                     executor.submit(
-                        process_single_folder, folder_path, base_obs, base_nav
+                        process_single_folder,
+                        folder_path,
+                        base_obs,
+                        base_nav,
                     )
                 ] = folder_path
 
