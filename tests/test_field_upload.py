@@ -41,6 +41,11 @@ def test_field_upload_happy_path(setup_env):
         assert any(name.endswith(".B") for name in names)
         assert any(name.endswith(".O") for name in names)
         assert any(name.endswith(".P") for name in names)
+        # como os arquivos têm nomes como "site.21B", basta checar o sufixo em 'B','O','P'
+        for ext in ("B", "O", "P"):
+            assert any(name.endswith(ext) for name in names), (
+                f"ZIP não contém arquivo com extensão {ext}"
+            )
 
     # Arquivos base originais devem ter sido apagados
     assert not any(root.glob("*.B"))
