@@ -203,7 +203,9 @@ class AVGeoSysUI:
 
         def fluxo(folder: Path):
             base_obs, base_nav = find_base_files(folder)
-            mrk_dirs = sorted({p.parent for p in folder.rglob("*_Timestamp.MRK")})
+            mrk_dirs = sorted(
+                {p.parent for p in folder.rglob("*_Timestamp.MRK")}
+            )
             total = len(mrk_dirs)
             self.progress.config(maximum=total, value=0)
 
@@ -249,11 +251,15 @@ class AVGeoSysUI:
             for res_dir in folder.rglob("PPK_Results"):
                 data_file = res_dir / "interpolated_data.json"
                 if not data_file.exists():
-                    logging.warning(f"interpolated_data.json não encontrado em {res_dir}, pulando")
+                    logging.warning(
+                        f"interpolated_data.json não encontrado em {res_dir}, pulando"
+                    )
                     continue
                 data = json.loads(data_file.read_text())
                 for entry in data:
-                    photo = next(res_dir.parent.glob(f"*{entry['photo']}"), None)
+                    photo = next(
+                        res_dir.parent.glob(f"*{entry['photo']}"), None
+                    )
                     if photo:
                         tasks.append((photo, entry))
 
