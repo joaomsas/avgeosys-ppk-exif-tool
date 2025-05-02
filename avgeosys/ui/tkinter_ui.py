@@ -244,27 +244,29 @@ class AVGeoSysUI:
         logging.info("Iniciando Geotagging...")
 
         def geo_flow(folder: Path):
+            # 1) Monta lista de tarefas (foto + dados) para contar o total
+            tasks = []
             for res_dir in folder.rglob("PPK_Results"):
                 data_file = res_dir / "interpolated_data.json"
                 if not data_file.exists():
-                    logging.warning(
-                        f"interpolated_data.json não encontrado em {res_dir}, pulando"
-                    )
+                    logging.warning(f"interpolated_data.json não encontrado em {res_dir}, pulando")
                     continue
                 data = json.loads(data_file.read_text())
                 for entry in data:
-                    photo = next(
-                        res_dir.parent.glob(f"*{entry['photo']}"),
-                        None,
-                    )
+                    photo = next(res_dir.parent.glob(f"*{entry['photo']}"), None)
                     if photo:
-                        update_exif(
-                            photo,
-                            entry["lat"],
-                            entry["lon"],
-                            entry["height"],
-                        )
+                        tasks.append((photo, entry))
 
+            total = len(tasks)
+            # 2) Configura a barra de progresso
+            self.progress.config(maximum=total, value=0)
+
+            # 3) Executa atualizações e avança a barra
+            for idx, (photo, entry) in enumerate(tasks, 1):
+                update_exif(photo, entry["lat"], entry["lon"], entry["height"])
+                self.progress["value"] = idx
+
+            # Gera o KMZ compilado a partir dos EXIFs
             pts = extract_exif_coordinates(folder)
             kmz = folder / "compilado_exif_data.kmz"
             kml = simplekml.Kml()
@@ -272,6 +274,9 @@ class AVGeoSysUI:
                 kml.newpoint(coords=[(pt["lon"], pt["lat"])])
             kml.savekmz(str(kmz))
             logging.info(f"KMZ de EXIF salvo em: {kmz.name}")
+
+            # 4) (Opcional) retorna a barra a zero ao fim
+            self.progress["value"] = 0
 
         self._run_task(geo_flow, root)
 
@@ -290,4 +295,3 @@ class AVGeoSysUI:
 
 if __name__ == "__main__":
     AVGeoSysUI().run()
-    
