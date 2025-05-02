@@ -5,8 +5,6 @@ Interface gráfica usando Tkinter.
 import logging
 import sys
 import json
-import shutil
-import zipfile
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -28,9 +26,11 @@ from avgeosys.core.exif import (
     update_exif,
 )
 from avgeosys.core.report import generate_report_and_kmz
+from avgeosys.core.fieldupload import field_upload
 
 
 class TextHandler(logging.Handler):
+    """Redirect logs to the Tkinter Text widget."""
     def __init__(self, text_widget):
         super().__init__()
         self.text_widget = text_widget
@@ -60,8 +60,8 @@ class AVGeoSysUI:
         png = base_dir / "AVGeoSysIcon.png"
         try:
             self.root.iconbitmap(str(ico))
-        except Exception:
-            logging.warning("Não foi possível carregar ícone .ico")
+        except Exception as e:
+            logging.warning(f"Não foi possível carregar ícone .ico: {e}")
         try:
             img = tk.PhotoImage(file=str(png))
             self.root.iconphoto(False, img)
@@ -196,34 +196,38 @@ class AVGeoSysUI:
     def run_ppk(self):
         root = Path(self.directory_var.get())
         if not root.is_dir():
-            messagebox.showerror(
-                "Erro", "Selecione um diretório válido."
-            )
+            messagebox.showerror("Erro", "Selecione um diretório válido.")
             return
 
         logging.info("Iniciando PPK...")
 
         def fluxo(folder: Path):
             base_obs, base_nav = find_base_files(folder)
-            dirs = sorted(
-                {p.parent for p in folder.rglob("*_Timestamp.MRK")}
-            )
-            total = len(dirs)
+            mrk_dirs = sorted({p.parent for p in folder.rglob("*_Timestamp.MRK")})
+            total = len(mrk_dirs)
             self.progress.config(maximum=total, value=0)
 
-            for idx, sub in enumerate(dirs, 1):
+            for idx, mrk_parent in enumerate(mrk_dirs, 1):
                 pos_file = process_single_folder(
-                    sub, base_obs, base_nav
+                    mrk_parent, base_obs, base_nav
                 )
-                mrk = next(sub.glob("*_Timestamp.MRK"))
-                mrk_df = preprocess_and_read_mrk(mrk, sub)
-                pos_df = load_pos_data(pos_file)
-                if not mrk_df.empty and not pos_df.empty:
-                    interp = interpolate_positions(pos_df, mrk_df)
-                    out = sub / "interpolated_data.json"
-                    out.write_text(
-                        json.dumps(interp, indent=4)
+                result_dir = pos_file.parent
+                mrk = next(mrk_parent.glob("*_Timestamp.MRK"), None)
+                if mrk:
+                    mrk_df = preprocess_and_read_mrk(
+                        mrk, result_dir
                     )
+                    pos_df = load_pos_data(pos_file)
+                    if not mrk_df.empty and not pos_df.empty:
+                        interp = interpolate_positions(
+                            pos_df, mrk_df
+                        )
+                        with open(
+                            result_dir / "interpolated_data.json",
+                            "w",
+                            encoding="utf-8",
+                        ) as f:
+                            json.dump(interp, f, indent=4)
                 self.progress["value"] = idx
 
             generate_report_and_kmz(folder)
@@ -234,23 +238,23 @@ class AVGeoSysUI:
     def run_geotagging(self):
         root = Path(self.directory_var.get())
         if not root.is_dir():
-            messagebox.showerror(
-                "Erro", "Selecione um diretório válido."
-            )
+            messagebox.showerror("Erro", "Selecione um diretório válido.")
             return
 
         logging.info("Iniciando Geotagging...")
 
         def geo_flow(folder: Path):
             for res_dir in folder.rglob("PPK_Results"):
-                data = json.loads(
-                    (res_dir / "interpolated_data.json").read_text()
-                )
+                data_file = res_dir / "interpolated_data.json"
+                if not data_file.exists():
+                    logging.warning(
+                        f"interpolated_data.json não encontrado em {res_dir}, pulando"
+                    )
+                    continue
+                data = json.loads(data_file.read_text())
                 for entry in data:
                     photo = next(
-                        res_dir.parent.glob(
-                            f"*{entry['photo']}"
-                        ),
+                        res_dir.parent.glob(f"*{entry['photo']}"),
                         None,
                     )
                     if photo:
@@ -265,78 +269,20 @@ class AVGeoSysUI:
             kmz = folder / "compilado_exif_data.kmz"
             kml = simplekml.Kml()
             for pt in pts:
-                kml.newpoint(
-                    coords=[(pt["lon"], pt["lat"])]
-                )
+                kml.newpoint(coords=[(pt["lon"], pt["lat"])])
             kml.savekmz(str(kmz))
-            logging.info(
-                f"KMZ de EXIF salvo em: {kmz.name}"
-            )
+            logging.info(f"KMZ de EXIF salvo em: {kmz.name}")
 
         self._run_task(geo_flow, root)
 
     def run_field_upload(self):
         root = Path(self.directory_var.get())
         if not root.is_dir():
-            messagebox.showerror(
-                "Erro", "Selecione um diretório válido."
-            )
+            messagebox.showerror("Erro", "Selecione um diretório válido.")
             return
 
         logging.info("Iniciando FieldUpload...")
-
-        def upload_flow(folder: Path):
-            for res in folder.rglob("PPK_Results"):
-                shutil.rmtree(res)
-                logging.info(f"Removido: {res}")
-
-            candidates = []
-            for ext in ("B", "O", "P"):
-                lst = list(folder.glob(f"*[0-9][0-9]{ext}"))
-                if lst:
-                    latest = max(
-                        lst,
-                        key=lambda p: int(p.suffix[1:3])
-                    )
-                    candidates.append(latest)
-
-            root_sub = None
-            for sub in sorted(folder.iterdir()):
-                if sub.is_dir() and any(sub.glob("*.jpg")):
-                    root_sub = sub
-                    logging.info(
-                        f"Primeira subpasta para upload: {sub}"
-                    )
-                    break
-
-            if not root_sub:
-                logging.error(
-                    "Nenhuma subpasta com fotos processadas "
-                    "encontrada."
-                )
-                return
-
-            zip_path = root_sub / "base_rinex.zip"
-            with zipfile.ZipFile(zip_path, "w") as zf:
-                for bf in candidates:
-                    zf.write(bf, bf.name)
-                    logging.info(f"ZIP: {bf.name}")
-
-            for bf in candidates:
-                bf.unlink()
-
-            for fn in (
-                "compilado_exif_data.kmz",
-                "relatorio_processamento.txt",
-                "resultado_interpolado.kmz",
-            ):
-                fp = folder / fn
-                if fp.exists():
-                    fp.unlink()
-
-            logging.info("FieldUpload concluído.")
-
-        self._run_task(upload_flow, root)
+        self._run_task(field_upload, root)
 
     def run(self):
         self.root.mainloop()
@@ -344,3 +290,4 @@ class AVGeoSysUI:
 
 if __name__ == "__main__":
     AVGeoSysUI().run()
+    
