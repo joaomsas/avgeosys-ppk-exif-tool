@@ -1,5 +1,6 @@
 import zipfile
 from pathlib import Path
+import sys
 import pytest
 from avgeosys.core.fieldupload import field_upload
 
@@ -66,4 +67,39 @@ def test_field_upload_no_photos(tmp_path):
     # sem pasta de fotos, deve falhar
     with pytest.raises(FileNotFoundError):
         field_upload(root)
+
+
+def test_cli_field_upload_invoked(monkeypatch, tmp_path):
+    from avgeosys.cli import cli as cli_mod
+    called = {}
+
+    def fake_field_upload(path: Path):
+        called["path"] = path
+
+    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p: None)
+    monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: None)
+    monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: None)
+    monkeypatch.setattr(cli_mod, "cmd_report", lambda p: None)
+    monkeypatch.setattr(cli_mod, "field_upload", fake_field_upload)
+    monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--field-upload"])
+
+    cli_mod.main()
+
+    assert called.get("path") == tmp_path
+
+
+def test_cli_field_upload_with_all(monkeypatch, tmp_path):
+    from avgeosys.cli import cli as cli_mod
+    calls = []
+
+    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p: calls.append("ppk"))
+    monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: calls.append("interp"))
+    monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: calls.append("geo"))
+    monkeypatch.setattr(cli_mod, "cmd_report", lambda p: calls.append("report"))
+    monkeypatch.setattr(cli_mod, "field_upload", lambda p: calls.append("fu"))
+    monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--all", "--field-upload"])
+
+    cli_mod.main()
+
+    assert "fu" in calls
 

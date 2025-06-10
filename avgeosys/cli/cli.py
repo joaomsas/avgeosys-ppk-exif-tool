@@ -16,6 +16,7 @@ from avgeosys.core.interpolator import (
 )
 from avgeosys.core.exif import update_exif, generate_exif_kmz
 from avgeosys.core.report import generate_report_and_kmz
+from avgeosys.core.fieldupload import field_upload
 
 
 def setup_logging(debug: bool):
@@ -72,6 +73,12 @@ def cmd_report(path: Path):
     logging.info("Relatório e KMZ gerados.")
 
 
+def cmd_field_upload(path: Path):
+    """Executa o utilitário de FieldUpload."""
+    logging.info("Iniciando FieldUpload...")
+    field_upload(path)
+
+
 def main():
     p = argparse.ArgumentParser(
         prog="avgeosys",
@@ -108,6 +115,11 @@ def main():
         help="Gerar relatório de PPK",
     )
     p.add_argument(
+        "--field-upload",
+        action="store_true",
+        help="Executar FieldUpload",
+    )
+    p.add_argument(
         "--all",
         action="store_true",
         help="Executar todas as etapas",
@@ -129,6 +141,8 @@ def main():
         cmd_geotag(args.path)
     if args.all or args.report:
         cmd_report(args.path)
+    if args.field_upload:
+        cmd_field_upload(args.path)
 
 
 if __name__ == "__main__":
