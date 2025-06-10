@@ -1,6 +1,6 @@
 [Setup]
-AppName=AVGeoSys – PPK & EXIF Tool V0.2.04
-AppVersion=0.2.04
+AppName=AVGeoSys – PPK & EXIF Tool V0.3.02
+AppVersion=0.3.02
 DefaultDirName={pf}\AVGeoSys
 DefaultGroupName=AVGeoSys
 OutputBaseFilename=AVGeoSys_Installer
