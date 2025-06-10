@@ -1,6 +1,11 @@
 import pandas as pd
 import pytest
-from avgeosys.core.interpolator import interpolate_positions
+from pathlib import Path
+
+from avgeosys.core.interpolator import (
+    interpolate_positions,
+    preprocess_and_read_mrk,
+)
 
 def make_pos_df():
     # duas medições às 0 e 10 segundos
@@ -38,3 +43,20 @@ def test_interpolation_midpoint():
 def test_interpolation_empty_inputs():
     empty = pd.DataFrame()
     assert interpolate_positions(empty, empty) == []
+
+
+def test_preprocess_and_read_mrk(tmp_path):
+    data_dir = Path(__file__).parent / "data"
+    mrk_path = data_dir / "sample.MRK"
+
+    df = preprocess_and_read_mrk(mrk_path, tmp_path)
+
+    assert list(df.columns) == ["index", "time", "lat", "lon", "height"]
+    assert len(df) == 2
+
+    first = df.iloc[0]
+    assert first["index"] == 1
+    assert first["time"] == 0
+    assert first["lat"] == 10
+    assert first["lon"] == 20
+    assert first["height"] == 30
