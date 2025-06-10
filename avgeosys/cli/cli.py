@@ -123,7 +123,7 @@ def main():
 
     if args.all or args.ppk:
         cmd_ppk(args.path)
-    if args.all or args.interpretate:
+    if args.all or args.interpolate:
         cmd_interpolate(args.path)
     if args.all or args.geotag:
         cmd_geotag(args.path)

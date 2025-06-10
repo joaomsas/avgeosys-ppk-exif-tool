@@ -252,7 +252,8 @@ class AVGeoSysUI:
                 data_file = res_dir / "interpolated_data.json"
                 if not data_file.exists():
                     logging.warning(
-                        f"interpolated_data.json não encontrado em {res_dir}, pulando"
+                        "interpolated_data.json não encontrado em %s, pulando",
+                        res_dir,
                     )
                     continue
                 data = json.loads(data_file.read_text())
