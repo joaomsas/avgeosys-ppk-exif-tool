@@ -5,7 +5,7 @@ Configurações gerais do AVGeoSys
 from pathlib import Path
 import sys
 
-__version__ = "0.3.01"
+__version__ = "0.3.02"
 
 # Determina o diretório base, considerando PyInstaller
 BASE_DIR: Path = (
