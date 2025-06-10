@@ -72,14 +72,13 @@ def process_single_folder(
         f"Executando comando PPK: {' '.join(cmd)}"
     )
 
-    # Oculta janela no Windows
-    si = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
-    if si:
-        # obtém estilo de janela (ignorado pelo mypy)
+    # Oculta janela somente no Windows
+    si = None
+    if os.name == "nt" and hasattr(subprocess, "STARTUPINFO"):
+        si = subprocess.STARTUPINFO()  # type: ignore[attr-defined]
         flag = subprocess.STARTF_USESHOWWINDOW  # type: ignore[attr-defined]
         si.dwFlags |= flag
-        hide = subprocess.SW_HIDE  # type: ignore[attr-defined]
-        si.wShowWindow = hide
+        si.wShowWindow = subprocess.SW_HIDE  # type: ignore[attr-defined]
 
     subprocess.run(
         cmd,
