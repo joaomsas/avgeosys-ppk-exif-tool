@@ -27,6 +27,7 @@ from avgeosys.core.exif import (
 )
 from avgeosys.core.report import generate_report_and_kmz
 from avgeosys.core.fieldupload import field_upload
+from avgeosys.core import geoid_height
 
 
 class TextHandler(logging.Handler):
@@ -71,6 +72,7 @@ class AVGeoSysUI:
         self.root.config(bg=self.dark_bg)
         self.directory_var = tk.StringVar()
         self.use_rover_nav_var = tk.BooleanVar(value=True)
+        self.use_orthometric_var = tk.BooleanVar(value=False)
         self._build_ui()
         self._setup_logging()
 
@@ -135,6 +137,15 @@ class AVGeoSysUI:
             frame_btn,
             text="Usar rover NAV",
             variable=self.use_rover_nav_var,
+            bg=self.dark_bg,
+            fg=self.dark_fg,
+            selectcolor=self.dark_bg,
+        ).pack(side=tk.LEFT, padx=5)
+
+        tk.Checkbutton(
+            frame_btn,
+            text="Altitude ortométrica",
+            variable=self.use_orthometric_var,
             bg=self.dark_bg,
             fg=self.dark_fg,
             selectcolor=self.dark_bg,
@@ -283,7 +294,16 @@ class AVGeoSysUI:
 
             # 3) Executa atualizações e avança a barra
             for idx, (photo, entry) in enumerate(tasks, 1):
-                update_exif(photo, entry["lat"], entry["lon"], entry["height"])
+                height = entry["height"]
+                if self.use_orthometric_var.get():
+                    try:
+                        height -= geoid_height(entry["lat"], entry["lon"])
+                    except Exception as exc:  # pragma: no cover
+                        logging.warning(
+                            "Falha na conversão ortométrica: %s",
+                            exc,
+                        )
+                update_exif(photo, entry["lat"], entry["lon"], height)
                 self.progress["value"] = idx
 
             # Gera o KMZ compilado a partir dos EXIFs

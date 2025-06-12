@@ -78,7 +78,11 @@ def test_cli_field_upload_invoked(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p, use_rover_nav=True: None)
     monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: None)
-    monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "cmd_geotag",
+        lambda p, orthometric=False: None,
+    )
     monkeypatch.setattr(cli_mod, "cmd_report", lambda p: None)
     monkeypatch.setattr(cli_mod, "field_upload", fake_field_upload)
     monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--field-upload"])
@@ -94,7 +98,11 @@ def test_cli_field_upload_with_all(monkeypatch, tmp_path):
 
     monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p, use_rover_nav=True: calls.append("ppk"))
     monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: calls.append("interp"))
-    monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: calls.append("geo"))
+    monkeypatch.setattr(
+        cli_mod,
+        "cmd_geotag",
+        lambda p, orthometric=False: calls.append("geo"),
+    )
     monkeypatch.setattr(cli_mod, "cmd_report", lambda p: calls.append("report"))
     monkeypatch.setattr(cli_mod, "field_upload", lambda p: calls.append("fu"))
     monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--all", "--field-upload"])
