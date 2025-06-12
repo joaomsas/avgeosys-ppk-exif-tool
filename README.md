@@ -11,6 +11,13 @@ python -m pip install --upgrade pip
 pip install -e .
 ```
 
+Para habilitar o cálculo opcional do geóide com o PROJ, instale também
+`pyproj`:
+
+```bash
+pip install pyproj
+```
+
 Os testes utilizam `pytest`, `flake8` e `mypy`, que são instalados automaticamente na CI. Para executá-los localmente:
 
 ```bash
