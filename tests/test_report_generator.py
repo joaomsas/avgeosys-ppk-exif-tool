@@ -9,7 +9,7 @@ def write_interpolated(ppk_dir: Path, data):
     interp_file = ppk_dir / "interpolated_data.json"
     interp_file.write_text(json.dumps(data))
 
-@ pytest.fixture
+@pytest.fixture
 def setup_report(tmp_path):
     root = tmp_path
     # site1 with 2 points: one fixed (Q=1), one float (Q=2)

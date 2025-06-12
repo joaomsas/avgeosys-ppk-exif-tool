@@ -8,6 +8,8 @@ from typing import List, Dict
 
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+
 
 def preprocess_and_read_mrk(
     mrk_file: Path,
@@ -38,12 +40,12 @@ def preprocess_and_read_mrk(
             ],
         )
         mrk_data.dropna(inplace=True)
-        logging.info(
+        logger.info(
             f".MRK carregado: {len(mrk_data)} registros de "
             f"{mrk_file.name}"
         )
     except Exception as e:
-        logging.error(
+        logger.error(
             f"Erro ao ler .MRK {mrk_file.name}: {e}"
         )
         mrk_data = pd.DataFrame(
@@ -83,12 +85,12 @@ def load_pos_data(pos_file: Path) -> pd.DataFrame:
             pd.to_numeric,
             errors="coerce"
         ).dropna()
-        logging.info(
+        logger.info(
             f".pos carregado: {len(df)} registros de "
             f"{pos_file.name}"
         )
     except Exception as e:
-        logging.error(
+        logger.error(
             f"Erro ao ler .pos {pos_file.name}: {e}"
         )
         df = pd.DataFrame(
@@ -113,7 +115,7 @@ def interpolate_positions(
     Retorna lista de dicts com: index, photo, lat, lon, height, time, quality.
     """
     if pos_data.empty or mrk_data.empty:
-        logging.warning(
+        logger.warning(
             "Dados insuficientes para interpolação."
         )
         return []
@@ -160,7 +162,7 @@ def interpolate_positions(
         }
         interpolated.append(interp)
 
-    logging.info(
+    logger.info(
         f"Interpolação concluída: {len(interpolated)} "
         "pontos gerados."
     )
