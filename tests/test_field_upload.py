@@ -76,7 +76,7 @@ def test_cli_field_upload_invoked(monkeypatch, tmp_path):
     def fake_field_upload(path: Path):
         called["path"] = path
 
-    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p: None)
+    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p, use_rover_nav=True: None)
     monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: None)
     monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: None)
     monkeypatch.setattr(cli_mod, "cmd_report", lambda p: None)
@@ -92,7 +92,7 @@ def test_cli_field_upload_with_all(monkeypatch, tmp_path):
     from avgeosys.cli import cli as cli_mod
     calls = []
 
-    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p: calls.append("ppk"))
+    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p, use_rover_nav=True: calls.append("ppk"))
     monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: calls.append("interp"))
     monkeypatch.setattr(cli_mod, "cmd_geotag", lambda p: calls.append("geo"))
     monkeypatch.setattr(cli_mod, "cmd_report", lambda p: calls.append("report"))

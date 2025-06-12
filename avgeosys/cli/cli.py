@@ -27,9 +27,9 @@ def setup_logging(debug: bool):
     )
 
 
-def cmd_ppk(path: Path):
+def cmd_ppk(path: Path, use_rover_nav: bool = True):
     logging.info("Iniciando PPK...")
-    process_all_folders(path)
+    process_all_folders(path, use_rover_nav=use_rover_nav)
 
 
 def cmd_interpolate(path: Path):
@@ -100,6 +100,11 @@ def main():
         help="Processamento PPK",
     )
     p.add_argument(
+        "--skip-rover-nav",
+        action="store_true",
+        help="Ignorar arquivo .nav do rover",
+    )
+    p.add_argument(
         "--interpolate",
         action="store_true",
         help="Interpolação de posições",
@@ -134,7 +139,7 @@ def main():
     setup_logging(args.verbose)
 
     if args.all or args.ppk:
-        cmd_ppk(args.path)
+        cmd_ppk(args.path, use_rover_nav=not args.skip_rover_nav)
     if args.all or args.interpolate:
         cmd_interpolate(args.path)
     if args.all or args.geotag:
