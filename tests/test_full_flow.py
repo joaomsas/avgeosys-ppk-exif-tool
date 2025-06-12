@@ -26,7 +26,7 @@ def test_full_pipeline(tmp_path, setup_full, monkeypatch):
     root = setup_full
 
     # 1) Monkeypatch do PPK: cria PPK_Results e .pos
-    def fake_process_single_folder(folder, base_obs, base_nav):
+    def fake_process_single_folder(folder, base_obs, base_nav, use_rover_nav=True):
         out = folder / "PPK_Results"
         out.mkdir(parents=True, exist_ok=True)
         pos = out / "site_PPKOBS.pos"

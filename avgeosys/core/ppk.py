@@ -48,10 +48,13 @@ def process_single_folder(
     folder: Path,
     base_obs: Path,
     base_nav: Path,
+    use_rover_nav: bool = True,
 ) -> Path:
     """
     Executa o processamento PPK em uma única subpasta usando rnx2rtkp.
     Gera o arquivo .pos em folder/PPK_Results.
+    Se ``use_rover_nav`` for True, tenta adicionar o arquivo ``.nav`` do rover
+    ao comando.
     Retorna o Path do .pos gerado.
     """
     output_dir = folder / "PPK_Results"
@@ -70,6 +73,10 @@ def process_single_folder(
         str(base_obs),
         str(base_nav),
     ]
+    if use_rover_nav:
+        rover_nav = next(folder.glob("*.nav"), None)
+        if rover_nav:
+            cmd.append(str(rover_nav))
     logger.debug(
         f"Executando comando PPK: {' '.join(cmd)}"
     )
@@ -95,6 +102,7 @@ def process_single_folder(
 def process_all_folders(
     root_folder: Path,
     max_workers: Optional[int] = None,
+    use_rover_nav: bool = True,
 ) -> None:
     """
     Processa todas as subpastas em root_folder que contenham
@@ -115,6 +123,7 @@ def process_all_folders(
                         folder_path,
                         base_obs,
                         base_nav,
+                        use_rover_nav,
                     )
                 ] = folder_path
 

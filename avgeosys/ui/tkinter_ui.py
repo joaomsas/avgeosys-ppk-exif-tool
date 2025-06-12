@@ -70,6 +70,7 @@ class AVGeoSysUI:
 
         self.root.config(bg=self.dark_bg)
         self.directory_var = tk.StringVar()
+        self.use_rover_nav_var = tk.BooleanVar(value=True)
         self._build_ui()
         self._setup_logging()
 
@@ -129,6 +130,15 @@ class AVGeoSysUI:
             fg=self.btn_fg,
         )
         self.btn_upload.pack(side=tk.LEFT, padx=5)
+
+        tk.Checkbutton(
+            frame_btn,
+            text="Usar rover NAV",
+            variable=self.use_rover_nav_var,
+            bg=self.dark_bg,
+            fg=self.dark_fg,
+            selectcolor=self.dark_bg,
+        ).pack(side=tk.LEFT, padx=5)
 
         self.progress = ttk.Progressbar(
             self.root,
@@ -211,7 +221,10 @@ class AVGeoSysUI:
 
             for idx, mrk_parent in enumerate(mrk_dirs, 1):
                 pos_file = process_single_folder(
-                    mrk_parent, base_obs, base_nav
+                    mrk_parent,
+                    base_obs,
+                    base_nav,
+                    self.use_rover_nav_var.get(),
                 )
                 result_dir = pos_file.parent
                 mrk = next(mrk_parent.glob("*_Timestamp.MRK"), None)
