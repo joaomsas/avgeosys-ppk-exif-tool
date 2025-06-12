@@ -32,8 +32,10 @@ O executável `rnx2rtkp.exe` do RTKLIB deve estar disponível no diretório base
 O comando principal é `avgeosys` e aceita diversas opções:
 
 ```bash
-avgeosys PATH [--ppk] [--interpolate] [--geotag] [--report] [--field-upload] [--all] [--verbose]
+avgeosys PATH [--ppk] [--interpolate] [--geotag] [--orthometric] [--report] [--field-upload] [--all] [--verbose]
 ```
+
+Use `--orthometric` para gravar altitude ortométrica (altura sobre o geóide) durante o geotagging.
 
 Um fluxo completo pode ser executado com:
 

@@ -15,6 +15,7 @@ from avgeosys.core.interpolator import (
     interpolate_positions,
 )
 from avgeosys.core.exif import update_exif, generate_exif_kmz
+from avgeosys.core import geoid_height
 from avgeosys.core.report import generate_report_and_kmz
 from avgeosys.core.fieldupload import field_upload
 
@@ -52,7 +53,7 @@ def cmd_interpolate(path: Path):
         )
 
 
-def cmd_geotag(path: Path):
+def cmd_geotag(path: Path, orthometric: bool = False):
     logging.info("Iniciando geotagging...")
     for rd in path.rglob("PPK_Results"):
         jf = rd / "interpolated_data.json"
@@ -62,7 +63,16 @@ def cmd_geotag(path: Path):
         for e in data:
             photo = next(rd.parent.glob(f"*{e['photo']}"), None)
             if photo:
-                update_exif(photo, e["lat"], e["lon"], e["height"])
+                height = e["height"]
+                if orthometric:
+                    try:
+                        height -= geoid_height(e["lat"], e["lon"])
+                    except Exception as exc:  # pragma: no cover
+                        logging.warning(
+                            "Falha na conversão ortométrica: %s",
+                            exc,
+                        )
+                update_exif(photo, e["lat"], e["lon"], height)
     kmz_path = generate_exif_kmz(path)
     logging.info(f"KMZ de EXIF: {kmz_path}")
 
@@ -115,6 +125,11 @@ def main():
         help="Atualizar EXIF e gerar KMZ",
     )
     p.add_argument(
+        "--orthometric",
+        action="store_true",
+        help="Converter altitude para ortométrica no geotagging",
+    )
+    p.add_argument(
         "--report",
         action="store_true",
         help="Gerar relatório de PPK",
@@ -143,7 +158,7 @@ def main():
     if args.all or args.interpolate:
         cmd_interpolate(args.path)
     if args.all or args.geotag:
-        cmd_geotag(args.path)
+        cmd_geotag(args.path, orthometric=args.orthometric)
     if args.all or args.report:
         cmd_report(args.path)
     if args.field_upload:
