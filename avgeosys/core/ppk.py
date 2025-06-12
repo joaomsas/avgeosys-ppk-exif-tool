@@ -11,6 +11,8 @@ from typing import Tuple, Optional
 
 from avgeosys.config import RINEX2RTKP_PATH
 
+logger = logging.getLogger(__name__)
+
 
 def find_base_files(
     root_folder: Path,
@@ -35,7 +37,7 @@ def find_base_files(
 
     base_obs = max(obs_candidates, key=year_from_path)
     base_nav = max(nav_candidates, key=year_from_path)
-    logging.info(
+    logger.info(
         f"Selecionados arquivos base: OBS={base_obs.name}, "
         f"NAV={base_nav.name}"
     )
@@ -68,7 +70,7 @@ def process_single_folder(
         str(base_obs),
         str(base_nav),
     ]
-    logging.debug(
+    logger.debug(
         f"Executando comando PPK: {' '.join(cmd)}"
     )
 
@@ -120,6 +122,6 @@ def process_all_folders(
             folder_path = futures[future]
             try:
                 pos_file = future.result()
-                logging.info(f"PPK concluído: {pos_file}")
+                logger.info(f"PPK concluído: {pos_file}")
             except Exception as exc:
-                logging.error(f"Erro no processamento de {folder_path}: {exc}")
+                logger.error(f"Erro no processamento de {folder_path}: {exc}")

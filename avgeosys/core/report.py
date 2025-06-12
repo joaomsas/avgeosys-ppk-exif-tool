@@ -10,6 +10,8 @@ from typing import Optional
 
 import simplekml
 
+logger = logging.getLogger(__name__)
+
 
 def generate_report_and_kmz(
     root_folder: Path,
@@ -90,7 +92,7 @@ def generate_report_and_kmz(
                 )
 
         kml.savekmz(str(kmz_path))
-        logging.info(f"Relatório salvo em {report_file.name}")
-        logging.info(f"KMZ salvo em {kmz_path.name}")
+        logger.info(f"Relatório salvo em {report_file.name}")
+        logger.info(f"KMZ salvo em {kmz_path.name}")
     except Exception as e:
-        logging.error(f"Erro ao gerar relatório e KMZ: {e}")
+        logger.error(f"Erro ao gerar relatório e KMZ: {e}")

@@ -4,6 +4,8 @@ import logging
 from pathlib import Path
 from typing import List
 
+logger = logging.getLogger(__name__)
+
 
 def field_upload(root_folder: Path) -> Path:
     """
@@ -15,7 +17,7 @@ def field_upload(root_folder: Path) -> Path:
     # 1) Remove PPK_Results
     for rr in root_folder.rglob("PPK_Results"):
         shutil.rmtree(rr)
-        logging.info(f"Removido: {rr}")
+        logger.info(f"Removido: {rr}")
 
     # 2) Encontra o arquivo base mais recente para cada extensão
     base_files: List[Path] = []
@@ -45,7 +47,7 @@ def field_upload(root_folder: Path) -> Path:
     with zipfile.ZipFile(zip_path, "w") as zf:
         for bf in base_files:
             zf.write(bf, bf.name)
-            logging.info(f"ZIP: {bf.name}")
+            logger.info(f"ZIP: {bf.name}")
 
     # 5) Limpa arquivos base originais
     for bf in base_files:
@@ -61,5 +63,5 @@ def field_upload(root_folder: Path) -> Path:
         if fp.exists():
             fp.unlink()
 
-    logging.info("FieldUpload concluído.")
+    logger.info("FieldUpload concluído.")
     return zip_path
