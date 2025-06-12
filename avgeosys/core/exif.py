@@ -47,9 +47,17 @@ def update_exif(
     """
     try:
         exif_dict = piexif.load(str(photo_path))
+
+        # Define referências de hemisfério com base no sinal da coordenada
+        lat_ref = "N" if lat >= 0 else "S"
+        lon_ref = "E" if lon >= 0 else "W"
+
         exif_dict["GPS"][piexif.GPSIFD.GPSLatitude] = convert_to_dms(lat)
+        exif_dict["GPS"][piexif.GPSIFD.GPSLatitudeRef] = lat_ref.encode()
         exif_dict["GPS"][piexif.GPSIFD.GPSLongitude] = convert_to_dms(lon)
+        exif_dict["GPS"][piexif.GPSIFD.GPSLongitudeRef] = lon_ref.encode()
         exif_dict["GPS"][piexif.GPSIFD.GPSAltitude] = (int(height * 100), 100)
+
         piexif.insert(piexif.dump(exif_dict), str(photo_path))
         logger.info(f"EXIF atualizado: {photo_path.name}")
     except Exception as e:
