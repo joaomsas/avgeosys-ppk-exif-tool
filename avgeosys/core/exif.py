@@ -41,11 +41,17 @@ def update_exif(
     lat: float,
     lon: float,
     height: float,
+    use_geoid: bool = False,
 ) -> None:
     """
     Atualiza EXIF GPS de uma foto específica.
     """
     try:
+        if use_geoid:
+            from .geoid import ellipsoid_to_orthometric
+
+            height = ellipsoid_to_orthometric(lat, lon, height)
+
         exif_dict = piexif.load(str(photo_path))
         exif_dict["GPS"][piexif.GPSIFD.GPSLatitude] = convert_to_dms(lat)
         exif_dict["GPS"][piexif.GPSIFD.GPSLongitude] = convert_to_dms(lon)

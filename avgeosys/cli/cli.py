@@ -52,7 +52,7 @@ def cmd_interpolate(path: Path):
         )
 
 
-def cmd_geotag(path: Path):
+def cmd_geotag(path: Path, use_geoid: bool = False):
     logging.info("Iniciando geotagging...")
     for rd in path.rglob("PPK_Results"):
         jf = rd / "interpolated_data.json"
@@ -62,7 +62,13 @@ def cmd_geotag(path: Path):
         for e in data:
             photo = next(rd.parent.glob(f"*{e['photo']}"), None)
             if photo:
-                update_exif(photo, e["lat"], e["lon"], e["height"])
+                update_exif(
+                    photo,
+                    e["lat"],
+                    e["lon"],
+                    e["height"],
+                    use_geoid=use_geoid,
+                )
     kmz_path = generate_exif_kmz(path)
     logging.info(f"KMZ de EXIF: {kmz_path}")
 
@@ -110,6 +116,11 @@ def main():
         help="Atualizar EXIF e gerar KMZ",
     )
     p.add_argument(
+        "--orthometric",
+        action="store_true",
+        help="Converter altura para ortométrica via geóide",
+    )
+    p.add_argument(
         "--report",
         action="store_true",
         help="Gerar relatório de PPK",
@@ -138,7 +149,7 @@ def main():
     if args.all or args.interpolate:
         cmd_interpolate(args.path)
     if args.all or args.geotag:
-        cmd_geotag(args.path)
+        cmd_geotag(args.path, use_geoid=args.orthometric)
     if args.all or args.report:
         cmd_report(args.path)
     if args.field_upload:

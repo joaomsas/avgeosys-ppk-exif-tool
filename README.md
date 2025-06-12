@@ -27,6 +27,7 @@ O comando principal é `avgeosys` e aceita diversas opções:
 ```bash
 avgeosys PATH [--ppk] [--interpolate] [--geotag] [--report] [--field-upload] [--all] [--verbose]
 ```
+Use `--orthometric` para converter alturas usando geóide ao atualizar o EXIF.
 
 Um fluxo completo pode ser executado com:
 

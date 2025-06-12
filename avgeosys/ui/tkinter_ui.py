@@ -130,6 +130,18 @@ class AVGeoSysUI:
         )
         self.btn_upload.pack(side=tk.LEFT, padx=5)
 
+        self.use_geoid_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            frame_btn,
+            text="Usar geóide",
+            variable=self.use_geoid_var,
+            onvalue=True,
+            offvalue=False,
+            bg=self.dark_bg,
+            fg=self.dark_fg,
+            selectcolor=self.dark_bg,
+        ).pack(side=tk.LEFT, padx=5)
+
         self.progress = ttk.Progressbar(
             self.root,
             orient="horizontal",
@@ -269,8 +281,15 @@ class AVGeoSysUI:
             self.progress.config(maximum=total, value=0)
 
             # 3) Executa atualizações e avança a barra
+            use_geoid = self.use_geoid_var.get()
             for idx, (photo, entry) in enumerate(tasks, 1):
-                update_exif(photo, entry["lat"], entry["lon"], entry["height"])
+                update_exif(
+                    photo,
+                    entry["lat"],
+                    entry["lon"],
+                    entry["height"],
+                    use_geoid=use_geoid,
+                )
                 self.progress["value"] = idx
 
             # Gera o KMZ compilado a partir dos EXIFs
