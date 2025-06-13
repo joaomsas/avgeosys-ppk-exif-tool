@@ -42,7 +42,11 @@ def test_process_single_folder_uses_rover_nav(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ppk_mod.subprocess, "run", fake_run)
     monkeypatch.setattr(ppk_mod, "RINEX2RTKP_PATH", Path("rtk"))
+    monkeypatch.setattr(ppk_mod, "RINEX2RTKP_CONFIG", Path("conf"))
 
     process_single_folder(tmp_path, base_obs, base_nav, True)
 
-    assert str(rover_nav) in captured.get("cmd", [])
+    cmd_list = captured.get("cmd", [])
+    assert str(rover_nav) in cmd_list
+    assert "-k" in cmd_list
+    assert str(Path("conf")) in cmd_list
