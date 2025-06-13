@@ -9,7 +9,7 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple, Optional
 
-from avgeosys.config import RINEX2RTKP_PATH
+from avgeosys.config import RINEX2RTKP_PATH, RINEX2RTKP_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,8 @@ def process_single_folder(
         str(RINEX2RTKP_PATH),
         "-o",
         str(pos_output),
+        "-k",
+        str(RINEX2RTKP_CONFIG),
         str(rover_obs),
         str(base_obs),
         str(base_nav),

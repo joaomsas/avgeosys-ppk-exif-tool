@@ -25,7 +25,7 @@ pip install pytest flake8 mypy
 pytest
 ```
 
-O executável `rnx2rtkp.exe` do RTKLIB deve estar disponível no diretório base do projeto para o processamento PPK.
+O executável `rnx2rtkp.exe` do RTKLIB deve estar disponível no diretório base do projeto para o processamento PPK. As opções utilizadas no processamento são lidas do arquivo `ppk_rnx2rtkp.conf`, incluso no repositório.
 
 ## Uso da CLI
 
