@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Dict
 
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -110,55 +111,36 @@ def interpolate_positions(
     Retorna lista de dicts com: index, photo, lat, lon, height, time, quality.
     """
     if pos_data.empty or mrk_data.empty:
-        logger.warning(
-            "Dados insuficientes para interpolação."
-        )
+        logger.warning("Dados insuficientes para interpolação.")
         return []
 
-    interpolated: List[Dict] = []
-    for _, row in mrk_data.iterrows():
-        diffs = (
-            pos_data["seconds"] - row["time"]
-        ).abs()
-        if len(diffs) < 2:
-            continue
+    # ordena por tempo para garantir monotonicidade no interp
+    pos_sorted = pos_data.sort_values("seconds")
 
-        nearest = pos_data.iloc[
-            diffs.nsmallest(2).index
-        ]
-        t1, t2 = nearest["seconds"].values
-        lat1, lat2 = nearest["lat"].values
-        lon1, lon2 = nearest["lon"].values
-        h1, h2 = nearest["height"].values
-        q1, q2 = nearest["quality"].values
+    times = pos_sorted["seconds"].values
+    mrk_times = mrk_data["time"].values
 
-        if t1 == t2:
-            continue
+    lat_vals = pos_sorted["lat"].values
+    lon_vals = pos_sorted["lon"].values
+    height_vals = pos_sorted["height"].values
+    quality_vals = pos_sorted["quality"].values
 
-        w = (row["time"] - t1) / (t2 - t1)
-        interp = {
-            "index": int(row["index"]),
-            "photo": (
-                f"_{int(row['index']):04}_V.JPG"
-            ),
-            "lat": float(
-                lat1 + w * (lat2 - lat1)
-            ),
-            "lon": float(
-                lon1 + w * (lon2 - lon1)
-            ),
-            "height": float(
-                h1 + w * (h2 - h1)
-            ),
-            "time": float(row["time"]),
-            "quality": int(
-                round(q1 + w * (q2 - q1))
-            ),
-        }
-        interpolated.append(interp)
+    lat_interp = np.interp(mrk_times, times, lat_vals)
+    lon_interp = np.interp(mrk_times, times, lon_vals)
+    height_interp = np.interp(mrk_times, times, height_vals)
+    quality_interp = np.interp(mrk_times, times, quality_vals)
+
+    result_df = pd.DataFrame({
+        "index": mrk_data["index"].astype(int).values,
+        "photo": mrk_data["index"].astype(int).apply(lambda i: f"_{i:04}_V.JPG"),
+        "lat": lat_interp.astype(float),
+        "lon": lon_interp.astype(float),
+        "height": height_interp.astype(float),
+        "time": mrk_times.astype(float),
+        "quality": np.rint(quality_interp).astype(int),
+    })
 
     logger.info(
-        f"Interpolação concluída: {len(interpolated)} "
-        "pontos gerados."
+        f"Interpolação concluída: {len(result_df)} pontos gerados."
     )
-    return interpolated
+    return result_df.to_dict(orient="records")
