@@ -16,19 +16,14 @@ def preprocess_and_read_mrk(
     output_dir: Path,
 ) -> pd.DataFrame:
     """
-    Lê o .MRK, substitui vírgulas por tabulação e retorna
-    DataFrame com colunas: index, time, lat, lon, height.
+    Lê o arquivo .MRK e retorna DataFrame com colunas
+    ``index``, ``time``, ``lat``, ``lon`` e ``height``.
     """
-    temp_file = output_dir / mrk_file.name.replace(
-        ".MRK", "_temp.MRK"
-    )
     try:
-        text = mrk_file.read_text()
-        text = text.replace(",", "\t")
-        temp_file.write_text(text)
         mrk_data = pd.read_csv(
-            temp_file,
-            sep=r"\s+",
+            mrk_file,
+            sep=r"[\s,]+",
+            engine="python",
             header=None,
             usecols=[0, 1, 9, 11, 13],
             names=[
