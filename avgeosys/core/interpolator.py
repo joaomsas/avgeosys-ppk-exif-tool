@@ -132,7 +132,9 @@ def interpolate_positions(
 
     result_df = pd.DataFrame({
         "index": mrk_data["index"].astype(int).values,
-        "photo": mrk_data["index"].astype(int).apply(lambda i: f"_{i:04}_V.JPG"),
+        "photo": mrk_data["index"].astype(int).apply(
+            lambda i: f"_{i:04}_V.JPG"
+        ),
         "lat": lat_interp.astype(float),
         "lon": lon_interp.astype(float),
         "height": height_interp.astype(float),
