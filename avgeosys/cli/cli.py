@@ -5,7 +5,10 @@ Interface de linha de comando para AVGeoSys.
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from typing import Optional
 
 from avgeosys import __version__
 from avgeosys.core.ppk import process_all_folders
@@ -53,8 +56,14 @@ def cmd_interpolate(path: Path):
         )
 
 
-def cmd_geotag(path: Path, orthometric: bool = False):
+def cmd_geotag(
+    path: Path,
+    orthometric: bool = False,
+    workers: Optional[int] = None,
+):
     logging.info("Iniciando geotagging...")
+
+    tasks = []
     for rd in path.rglob("PPK_Results"):
         jf = rd / "interpolated_data.json"
         if not jf.exists():
@@ -62,18 +71,29 @@ def cmd_geotag(path: Path, orthometric: bool = False):
         data = json.loads(jf.read_text())
         for e in data:
             photo = next(rd.parent.glob(f"*{e['photo']}"), None)
-            if photo:
-                height = e["height"]
-                if orthometric:
-                    try:
-                        height -= geoid_height(e["lat"], e["lon"])
-                    except Exception as exc:  # pragma: no cover
-                        logging.warning(
-                            "Falha na conversão ortométrica: %s",
-                            exc,
-                        )
-                update_exif(photo, e["lat"], e["lon"], height)
-    kmz_path = generate_exif_kmz(path)
+            if not photo:
+                continue
+            height = e["height"]
+            if orthometric:
+                try:
+                    height -= geoid_height(e["lat"], e["lon"])
+                except Exception as exc:  # pragma: no cover
+                    logging.warning(
+                        "Falha na conversão ortométrica: %s",
+                        exc,
+                    )
+            tasks.append((photo, e["lat"], e["lon"], height))
+
+    worker_count = workers or os.cpu_count() or 1
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [
+            executor.submit(update_exif, p, lat, lon, h)
+            for p, lat, lon, h in tasks
+        ]
+        for f in futures:
+            f.result()
+
+    kmz_path = generate_exif_kmz(path, workers=workers)
     logging.info(f"KMZ de EXIF: {kmz_path}")
 
 
