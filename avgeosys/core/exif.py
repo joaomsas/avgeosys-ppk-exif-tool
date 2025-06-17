@@ -3,9 +3,11 @@ Módulo de geotagging e geração de KMZ via EXIF.
 """
 
 import logging
+import os
 from pathlib import Path
 from math import floor
 from typing import Tuple, List, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import piexif
 import simplekml
@@ -64,13 +66,16 @@ def update_exif(
         logger.error(f"Erro ao atualizar EXIF {photo_path.name}: {e}")
 
 
-def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
+def extract_exif_coordinates(
+    root_folder: Path,
+    workers: Optional[int] = None,
+) -> List[Dict]:
     """
-    Extrai coordenadas GPS de todas as .jpg em root_folder via EXIF.
+    Extrai coordenadas GPS de todas as .jpg em ``root_folder`` via EXIF.
+    A leitura ocorre em paralelo usando ``ThreadPoolExecutor``.
     """
-    results: List[Dict] = []
 
-    for img in root_folder.rglob("*.jpg"):
+    def read_exif(img: Path) -> Optional[Dict]:
         try:
             gps_data = piexif.load(str(img)).get("GPS", {})
             lat = gps_data.get(piexif.GPSIFD.GPSLatitude)
@@ -88,14 +93,25 @@ def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
                 dec_lon = convert_from_dms(lon, lon_ref)
                 dec_alt = alt[0] / alt[1] if alt else None
 
-                results.append({
+                return {
                     "lat": dec_lat,
                     "lon": dec_lon,
                     "height": dec_alt,
                     "filename": str(img),
-                })
+                }
         except Exception as e:
             logger.warning(f"Falha ao ler EXIF {img.name}: {e}")
+        return None
+
+    results: List[Dict] = []
+    images = list(root_folder.rglob("*.jpg"))
+    worker_count = workers or os.cpu_count() or 1
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        future_map = {executor.submit(read_exif, img): img for img in images}
+        for future in as_completed(future_map):
+            res = future.result()
+            if res:
+                results.append(res)
 
     logger.info(
         f"EXIF extraído: {len(results)} imagens processadas."
@@ -106,11 +122,12 @@ def extract_exif_coordinates(root_folder: Path) -> List[Dict]:
 def generate_exif_kmz(
     root_folder: Path,
     kmz_path: Optional[Path] = None,
+    workers: Optional[int] = None,
 ) -> Path:
     """
     Gera KMZ com pontos EXIF extraídos em root_folder.
     """
-    data = extract_exif_coordinates(root_folder)
+    data = extract_exif_coordinates(root_folder, workers=workers)
 
     if kmz_path is None:
         kmz_path = root_folder / "compilado_exif_data.kmz"
