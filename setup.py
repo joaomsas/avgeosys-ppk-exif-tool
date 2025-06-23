@@ -12,6 +12,8 @@ setup(
         "simplekml",
         "pandas",
         "numpy",
+        "alpaca-trade-api",
+        "pandas-ta",
     ],
     entry_points={
         "console_scripts": [
