@@ -37,12 +37,23 @@ def test_process_single_folder_uses_rover_nav(tmp_path, monkeypatch):
 
     captured = {}
 
-    def fake_run(cmd, check, stdout, stderr, startupinfo=None):
+    def fake_run(cmd, stdout=None, stderr=None, startupinfo=None):
         captured["cmd"] = cmd
+        class R:
+            returncode = 0
+            stdout = b""
+        return R()
 
     monkeypatch.setattr(ppk_mod.subprocess, "run", fake_run)
     monkeypatch.setattr(ppk_mod, "RINEX2RTKP_PATH", Path("rtk"))
     monkeypatch.setattr(ppk_mod, "RINEX2RTKP_CONFIG", Path("conf"))
+
+    event_file = tmp_path / "ev.txt"
+    monkeypatch.setattr(
+        ppk_mod, "convert_mrk_to_events_file", lambda m, o, obs: event_file
+    )
+    mrk = tmp_path / "site_Timestamp.MRK"
+    mrk.write_text("1,0")
 
     process_single_folder(tmp_path, base_obs, base_nav, True)
 
@@ -50,3 +61,5 @@ def test_process_single_folder_uses_rover_nav(tmp_path, monkeypatch):
     assert str(rover_nav) in cmd_list
     assert "-k" in cmd_list
     assert str(Path("conf")) in cmd_list
+    assert "-e" in cmd_list
+    assert str(event_file) in cmd_list

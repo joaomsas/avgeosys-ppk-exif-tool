@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Tuple, Optional
 
 from avgeosys.config import RINEX2RTKP_PATH, RINEX2RTKP_CONFIG
+from avgeosys.core.events import convert_mrk_to_events_file
 
 logger = logging.getLogger(__name__)
 
@@ -65,12 +66,28 @@ def process_single_folder(
         raise FileNotFoundError(f"Arquivo .obs não encontrado em {folder}")
 
     pos_output = output_dir / f"{rover_obs.stem}_PPKOBS.pos"
+
+    # converte eventos se houver arquivo .MRK
+    mrk_file = next(folder.glob("*_Timestamp.MRK"), None)
+    events_file = None
+    if mrk_file:
+        try:
+            events_file = convert_mrk_to_events_file(
+                mrk_file, output_dir, base_obs
+            )
+        except Exception as exc:  # pragma: no cover - log error only
+            logger.warning("Falha ao converter MRK para eventos: %s", exc)
+
     cmd = [
         str(RINEX2RTKP_PATH),
         "-o",
         str(pos_output),
         "-k",
         str(RINEX2RTKP_CONFIG),
+    ]
+    if events_file:
+        cmd += ["-e", str(events_file)]
+    cmd += [
         str(rover_obs),
         str(base_obs),
         str(base_nav),
@@ -79,9 +96,7 @@ def process_single_folder(
         rover_nav = next(folder.glob("*.nav"), None)
         if rover_nav:
             cmd.append(str(rover_nav))
-    logger.debug(
-        f"Executando comando PPK: {' '.join(cmd)}"
-    )
+    logger.debug("Executando comando PPK: %s", " ".join(cmd))
 
     # Oculta janela somente no Windows
     si = None
@@ -91,13 +106,16 @@ def process_single_folder(
         si.dwFlags |= flag
         si.wShowWindow = subprocess.SW_HIDE  # type: ignore[attr-defined]
 
-    subprocess.run(
+    result = subprocess.run(
         cmd,
-        check=True,
-        stdout=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         startupinfo=si,
     )
+    logger.info("rnx2rtkp retornou codigo %s", result.returncode)
+    if result.returncode != 0:
+        msg = result.stdout.decode(errors="ignore")
+        logger.warning("Falha no rnx2rtkp:\n%s", msg)
     return pos_output
 
 
