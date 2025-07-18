@@ -45,7 +45,9 @@ def test_process_single_folder_uses_rover_nav(tmp_path, monkeypatch):
         return R()
 
     monkeypatch.setattr(ppk_mod.subprocess, "run", fake_run)
-    monkeypatch.setattr(ppk_mod, "RINEX2RTKP_PATH", Path("rtk"))
+    exe = tmp_path / "rtk"
+    exe.write_text("")
+    monkeypatch.setattr(ppk_mod, "RINEX2RTKP_PATH", exe)
     monkeypatch.setattr(ppk_mod, "RINEX2RTKP_CONFIG", Path("conf"))
 
     event_file = tmp_path / "ev.txt"

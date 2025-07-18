@@ -65,6 +65,14 @@ def process_single_folder(
     if rover_obs is None:
         raise FileNotFoundError(f"Arquivo .obs não encontrado em {folder}")
 
+    if not RINEX2RTKP_PATH.exists():
+        logger.error(
+            "Executável rnx2rtkp.exe não encontrado em %s", RINEX2RTKP_PATH
+        )
+        raise FileNotFoundError(
+            f"rnx2rtkp.exe não encontrado: {RINEX2RTKP_PATH}"
+        )
+
     pos_output = output_dir / f"{rover_obs.stem}_PPKOBS.pos"
 
     # converte eventos se houver arquivo .MRK
