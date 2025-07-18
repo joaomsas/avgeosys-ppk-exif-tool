@@ -3,8 +3,10 @@ import pytest
 import avgeosys.core.ppk as ppk_mod
 from avgeosys.core.ppk import find_base_files, process_single_folder
 
-def touch(path: Path):
+
+def touch(path: Path) -> None:
     path.write_text("")  # cria arquivo vazio
+
 
 def test_find_base_files_selects_latest(tmp_path):
     # Cria vários arquivos .YYO e .YYP
@@ -17,6 +19,7 @@ def test_find_base_files_selects_latest(tmp_path):
     # deve escolher o .21O (ano mais alto) e .22P
     assert obs.suffix == ".21O"
     assert nav.suffix == ".22P"
+
 
 def test_find_base_files_missing(tmp_path):
     # Se faltar qualquer tipo, deve lançar FileNotFoundError
@@ -39,6 +42,7 @@ def test_process_single_folder_uses_rover_nav(tmp_path, monkeypatch):
 
     def fake_run(cmd, stdout=None, stderr=None, startupinfo=None):
         captured["cmd"] = cmd
+
         class R:
             returncode = 0
             stdout = b""

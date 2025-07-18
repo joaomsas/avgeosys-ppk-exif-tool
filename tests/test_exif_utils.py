@@ -3,6 +3,7 @@
 import pytest
 from avgeosys.core.exif import convert_to_dms, convert_from_dms
 
+
 def test_convert_to_from_dms():
     # Testa conversão de valor decimal para DMS e de volta
     original = -23.55052

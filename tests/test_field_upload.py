@@ -5,17 +5,19 @@ import pytest
 from avgeosys.core.fieldupload import field_upload
 
 
-def touch(p: Path):
+def touch(p: Path) -> None:
     p.write_text("conteúdo qualquer")
+
 
 @pytest.fixture
 def setup_env(tmp_path):
     root = tmp_path
 
-    # cria PPK_Results para remoção\    (root / "sub1" / "PPK_Results").mkdir(parents=True)
+    # cria PPK_Results para remoção
+    (root / "sub1" / "PPK_Results").mkdir(parents=True)
 
     # cria arquivos base .B, .O, .P com sufixos 20 e 21
-    for ext in ("B", "O", "P"):    
+    for ext in ("B", "O", "P"):
         touch(root / f"site.20{ext}")
         touch(root / f"site.21{ext}")
 
@@ -42,8 +44,9 @@ def test_field_upload_happy_path(setup_env):
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
         for ext in ("B", "O", "P"):
-            assert any(name.endswith(ext) for name in names), \
+            assert any(name.endswith(ext) for name in names), (
                 f"ZIP não contém arquivo com extensão {ext}"
+            )
 
     # Arquivos base originais devem ter sido apagados
     assert not any(root.glob("*.B"))
@@ -85,7 +88,11 @@ def test_cli_field_upload_invoked(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(cli_mod, "cmd_report", lambda p: None)
     monkeypatch.setattr(cli_mod, "field_upload", fake_field_upload)
-    monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--field-upload"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["avgeosys", str(tmp_path), "--field-upload"],
+    )
 
     cli_mod.main()
 
@@ -96,18 +103,33 @@ def test_cli_field_upload_with_all(monkeypatch, tmp_path):
     from avgeosys.cli import cli as cli_mod
     calls = []
 
-    monkeypatch.setattr(cli_mod, "cmd_ppk", lambda p, use_rover_nav=True: calls.append("ppk"))
-    monkeypatch.setattr(cli_mod, "cmd_interpolate", lambda p: calls.append("interp"))
+    monkeypatch.setattr(
+        cli_mod,
+        "cmd_ppk",
+        lambda p, use_rover_nav=True: calls.append("ppk"),
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "cmd_interpolate",
+        lambda p: calls.append("interp"),
+    )
     monkeypatch.setattr(
         cli_mod,
         "cmd_geotag",
         lambda p, orthometric=False: calls.append("geo"),
     )
-    monkeypatch.setattr(cli_mod, "cmd_report", lambda p: calls.append("report"))
+    monkeypatch.setattr(
+        cli_mod,
+        "cmd_report",
+        lambda p: calls.append("report"),
+    )
     monkeypatch.setattr(cli_mod, "field_upload", lambda p: calls.append("fu"))
-    monkeypatch.setattr(sys, "argv", ["avgeosys", str(tmp_path), "--all", "--field-upload"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["avgeosys", str(tmp_path), "--all", "--field-upload"],
+    )
 
     cli_mod.main()
 
     assert "fu" in calls
-

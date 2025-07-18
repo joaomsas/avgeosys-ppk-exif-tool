@@ -4,10 +4,12 @@ import zipfile
 import pytest
 from avgeosys.core.report import generate_report_and_kmz
 
+
 def write_interpolated(ppk_dir: Path, data):
     ppk_dir.mkdir(parents=True, exist_ok=True)
     interp_file = ppk_dir / "interpolated_data.json"
     interp_file.write_text(json.dumps(data))
+
 
 @pytest.fixture
 def setup_report(tmp_path):
@@ -24,6 +26,7 @@ def setup_report(tmp_path):
         {"lon": 50.0, "lat": 60.0, "quality": 3},
     ])
     return root
+
 
 def test_generate_report_and_kmz(tmp_path, setup_report):
     root = setup_report

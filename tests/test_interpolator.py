@@ -7,6 +7,7 @@ from avgeosys.core.interpolator import (
     preprocess_and_read_mrk,
 )
 
+
 def make_pos_df():
     # duas medições às 0 e 10 segundos
     return pd.DataFrame({
@@ -17,6 +18,7 @@ def make_pos_df():
         "quality": [1, 2],
     })
 
+
 def make_mrk_df():
     # uma foto tirada aos 5 segundos
     return pd.DataFrame({
@@ -24,8 +26,9 @@ def make_mrk_df():
         "time":  [5.0],
         "lat":   [None],  # lat/lon originais não usadas aqui
         "lon":   [None],
-        "height":[None],
+        "height": [None],
     })
+
 
 def test_interpolation_midpoint():
     pos_df = make_pos_df()
@@ -39,6 +42,7 @@ def test_interpolation_midpoint():
     assert pytest.approx(40.0) == point["lon"]
     assert pytest.approx(150.0) == point["height"]
     assert point["quality"] in (1, 2)
+
 
 def test_interpolation_empty_inputs():
     empty = pd.DataFrame()
