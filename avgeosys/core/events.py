@@ -82,8 +82,8 @@ def obs_time_bounds(obs_file: Path) -> Tuple[float, float]:
             int((sec - int(sec)) * 1_000_000),
             tzinfo=timezone.utc,
         )
-        week, sow = datetime_to_gpsweek_sow(dt)
-        return week * 604800 + sow
+        _, sow = datetime_to_gpsweek_sow(dt)
+        return sow
     if first is None or last is None:
         return float("nan"), float("nan")
     return to_sow(first), to_sow(last)
