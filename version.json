@@ -2,11 +2,11 @@
   "stable": {
     "version": "1.0.1",
     "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.1/AVGeoSys_Setup_1.0.1.exe",
-    "notes": "Upload automático de logs para Google Drive + correção de encoding no log"
+    "notes": "Upload automatico de logs para Google Drive + correcao de encoding no log"
   },
   "beta": {
     "version": "1.0.1",
     "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.1/AVGeoSys_Setup_1.0.1.exe",
-    "notes": "Upload automático de logs para Google Drive + correção de encoding no log"
+    "notes": "Upload automatico de logs para Google Drive + correcao de encoding no log"
   }
 }

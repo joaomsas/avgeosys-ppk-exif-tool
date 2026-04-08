@@ -80,8 +80,7 @@ def check_for_update(
 
         return None
 
-    except Exception as exc:
-        logger.debug("Verificação de atualização falhou: %s", exc)
+    except Exception:
         return None
 
 
