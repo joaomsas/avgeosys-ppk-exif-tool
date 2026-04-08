@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MyPy
+.mypy_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+*.suo
+*.user
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.*
+*.env
+
+# PyInstaller output
+*.spec.bak
+dist/
+build/
+
+# Logs
+*.log
+
+# PPK output (user data, not source)
+PPK_Results/
+
+# Logs de execução locais
+Log e erros/
+
+# Claude Code / ferramentas internas de IA
+.claude/
+.specify/
+
+# Executável RTKLIB (binário de terceiro — obter em https://rtkexplorer.com/downloads/rtklib-qt/)
+rnx2rtkp.exe
