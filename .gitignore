@@ -48,6 +48,7 @@ PPK_Results/
 
 # Logs de execução locais
 Log e erros/
+Logs/
 
 # Claude Code / ferramentas internas de IA
 .claude/

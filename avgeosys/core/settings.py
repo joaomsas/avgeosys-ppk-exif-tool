@@ -22,6 +22,7 @@ DEFAULTS: Dict[str, Any] = {
     "orthometric": False,
     "last_project": "",
     "update_channel": "stable",  # "stable" | "beta"
+    "logs_central_dir": "",     # caminho absoluto para a pasta Logs/ central (OneDrive)
 }
 
 
