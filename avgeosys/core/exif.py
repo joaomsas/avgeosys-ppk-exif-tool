@@ -33,8 +33,8 @@ _SEC_MAX = 60 * _SEC_DENOMINATOR - 1
 # Tolerância para verificação de leitura EXIF após gravação (~11 metros)
 _VERIFY_TOLERANCE = 1e-4
 
-# Labels de qualidade PPK para gravação no EXIF UserComment
-_QUALITY_LABELS = {1: "Fixed", 2: "Float", 3: "Unknown"}
+# Labels de qualidade PPK para gravação no EXIF UserComment (códigos RTKLIB)
+_QUALITY_LABELS = {1: "Fixed", 2: "Float", 3: "SBAS", 4: "DGPS", 5: "Single", 6: "PPP"}
 
 
 def convert_to_dms(decimal_degrees: float) -> DMSTuple:
@@ -228,8 +228,8 @@ def batch_update_exif(
 ) -> Tuple[int, int]:
     """Grava GPS EXIF em múltiplos JPEGs em paralelo.
 
-    Antes de iniciar, verifica se há fotos com qualidade Unknown (Q=3) e
-    emite aviso — essas fotos têm coordenadas extrapoladas fora da janela .pos.
+    Antes de iniciar, verifica se há fotos Single (Q=5) ou fora da janela .pos
+    e emite aviso — essas fotos têm coordenadas sem correção diferencial.
 
     Args:
         records: Lista de dicts com chaves ``filename``, ``folder`` (opcional),
@@ -246,12 +246,12 @@ def batch_update_exif(
     project_path = Path(project_path)
 
     # Aviso sobre fotos com qualidade desconhecida
-    unknown_count = sum(1 for r in records if int(r.get("quality", 3)) == 3)
-    if unknown_count > 0:
+    single_count = sum(1 for r in records if int(r.get("quality", 5)) == 5)
+    if single_count > 0:
         logger.warning(
-            "%d foto(s) com qualidade UNKNOWN (Q=3) — coordenadas extrapoladas fora "
-            "da janela .pos. Verifique o resultado antes de usar em levantamento.",
-            unknown_count,
+            "%d foto(s) com qualidade SINGLE (Q=5) — coordenadas GPS autônomas, "
+            "sem correção PPK. Verifique sobreposição temporal entre rover e base.",
+            single_count,
         )
 
     if backup_dir is not None:
@@ -275,7 +275,7 @@ def batch_update_exif(
             lat=rec["latitude"],
             lon=rec["longitude"],
             alt=rec["height"],
-            ppk_quality=int(rec.get("quality", 3)),
+            ppk_quality=int(rec.get("quality", 5)),
             backup_dir=backup_dir,
         )
 

@@ -16,28 +16,35 @@ import simplekml
 
 logger = logging.getLogger(__name__)
 
-# Quality code → human-readable label
+# Quality code → human-readable label (RTKLIB codes)
 QUALITY_LABELS: Dict[int, str] = {
     1: "Fixed",
     2: "Float",
-    3: "Unknown",
+    3: "SBAS",
+    4: "DGPS",
+    5: "Single",
+    6: "PPP",
 }
 
 
 def _count_quality(data: List[Dict]) -> Dict[str, int]:
     counts: Dict[str, int] = {label: 0 for label in QUALITY_LABELS.values()}
+    counts["Unknown"] = 0  # fallback para códigos não mapeados
     for rec in data:
-        q = rec.get("quality", 3)
+        q = rec.get("quality", 5)
         label = QUALITY_LABELS.get(int(q), "Unknown")
         counts[label] += 1
     return counts
 
 
 def _write_quality_block(fh, counts: Dict[str, int], total: int) -> None:
-    for label in ("Fixed", "Float", "Unknown"):
-        n = counts[label]
+    for label in ("Fixed", "Float", "Single", "DGPS", "SBAS", "PPP", "Unknown"):
+        n = counts.get(label, 0)
+        if n == 0:
+            continue
         pct = (n / total * 100.0) if total > 0 else 0.0
-        fh.write(f"  {label:<10}: {n:>5}  ({pct:6.1f}%)\n")
+        warn = "  ⚠ GPS autônomo — sem correção PPK!" if label == "Single" and n > 0 else ""
+        fh.write(f"  {label:<10}: {n:>5}  ({pct:6.1f}%){warn}\n")
 
 
 def generate_report_and_kmz(
@@ -110,16 +117,25 @@ def generate_report_and_kmz(
     kmz_interp_path = output_dir / "resultado_interpolado.kmz"
     kml_interp = simplekml.Kml()
 
-    # Style icons by quality
+    # Style icons by quality (KML ABGR format)
+    _style_colors = {
+        "Fixed":   "ff00ff00",  # verde
+        "Float":   "ff00a5ff",  # laranja
+        "Single":  "ff0000ff",  # vermelho — GPS autônomo
+        "DGPS":    "ffff00ff",  # magenta
+        "SBAS":    "ffff8000",  # azul
+        "PPP":     "ff800000",  # azul escuro
+        "Unknown": "ff808080",  # cinza
+    }
     _styles: Dict[str, simplekml.Style] = {}
-    for q_label, color in (("Fixed", "ff00ff00"), ("Float", "ff00a5ff"), ("Unknown", "ff0000ff")):
+    for q_label, color in _style_colors.items():
         style = simplekml.Style()
         style.iconstyle.color = color
         style.iconstyle.scale = 0.8
         _styles[q_label] = style
 
     for rec in interpolated_data:
-        q_label = QUALITY_LABELS.get(int(rec.get("quality", 3)), "Unknown")
+        q_label = QUALITY_LABELS.get(int(rec.get("quality", 5)), "Unknown")
         pt = kml_interp.newpoint(
             name=rec["filename"],
             coords=[(rec["longitude"], rec["latitude"], rec["height"])],
@@ -131,7 +147,7 @@ def generate_report_and_kmz(
             f"Pasta: {rec.get('folder', '')}\n"
         )
         pt.altitudemode = simplekml.AltitudeMode.absolute
-        pt.style = _styles[q_label]
+        pt.style = _styles.get(q_label, _styles["Unknown"])
 
     kml_interp.savekmz(str(kmz_interp_path))
     logger.info("KMZ interpolado gravado em %s", kmz_interp_path)

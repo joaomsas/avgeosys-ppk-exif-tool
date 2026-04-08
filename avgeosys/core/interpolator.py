@@ -184,7 +184,7 @@ def interpolate_positions(
         q = int(round(float(np.interp(t, pos_t, pos_q))))
 
         if t < pos_min or t > pos_max:
-            q = 3
+            q = 5  # Single — evento fora da janela .pos (sem correção PPK)
 
         if orthometric:
             h = h - geoid_height(lat, lon)

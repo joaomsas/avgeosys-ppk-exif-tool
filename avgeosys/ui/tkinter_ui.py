@@ -998,19 +998,30 @@ class AVGeoSysUI:
             import folium
             from folium.plugins import MarkerCluster
 
-            quality_labels = {1: "Fixed", 2: "Float", 3: "Unknown"}
-            quality_colors = {1: "green", 2: "orange", 3: "red"}
+            quality_labels = {1: "Fixed", 2: "Float", 3: "SBAS", 4: "DGPS", 5: "Single", 6: "PPP"}
+            quality_colors = {1: "green", 2: "orange", 3: "blue", 4: "purple", 5: "red", 6: "darkblue"}
 
             total = len(data)
-            fixed_n = sum(1 for r in data if r.get("quality") == 1)
-            float_n = sum(1 for r in data if r.get("quality") == 2)
-            other_n = total - fixed_n - float_n
+            fixed_n  = sum(1 for r in data if r.get("quality") == 1)
+            float_n  = sum(1 for r in data if r.get("quality") == 2)
+            single_n = sum(1 for r in data if r.get("quality") == 5)
+            other_n  = total - fixed_n - float_n - single_n
             fixed_pct = fixed_n / total * 100 if total else 0.0
+            single_pct = single_n / total * 100 if total else 0.0
 
             center_lat = sum(r["latitude"] for r in data) / len(data)
             center_lon = sum(r["longitude"] for r in data) / len(data)
 
             m = folium.Map(location=[center_lat, center_lon], zoom_start=15)
+
+            # Alerta vermelho se Single domina
+            single_alert = ""
+            if single_pct > 50:
+                single_alert = (
+                    f'<br><span style="color:#c0392b;font-weight:bold;font-size:12px;">'
+                    f'⚠ {single_pct:.0f}% SINGLE — GPS autônomo sem correção PPK! '
+                    f'Verifique sobreposição temporal com a base.</span>'
+                )
 
             # Título flutuante no topo do mapa
             title_html = (
@@ -1026,9 +1037,11 @@ class AVGeoSysUI:
                 f' &nbsp;|&nbsp; '
                 f'<span style="color:#d28010;">&#9679; Float: {float_n}</span>'
                 f' &nbsp;|&nbsp; '
-                f'<span style="color:#c0392b;">&#9679; Outros: {other_n}</span>'
-                f'</span><br>'
-                f'<span style="font-size:10px;color:#888;">'
+                f'<span style="color:#c0392b;">&#9679; Single: {single_n}</span>'
+                + (f' &nbsp;|&nbsp; Outros: {other_n}' if other_n > 0 else '')
+                + f'</span>'
+                + single_alert
+                + f'<br><span style="font-size:10px;color:#888;">'
                 f'Coordenadas derivadas do processamento PPK (rnx2rtkp) — não são posições GPS brutas do MRK'
                 f'</span>'
                 '</div>'
@@ -1081,7 +1094,7 @@ class AVGeoSysUI:
             from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
             from matplotlib.figure import Figure
 
-            quality_labels = {1: "Fixed", 2: "Float", 3: "Unknown"}
+            quality_labels = {1: "Fixed", 2: "Float", 3: "SBAS", 4: "DGPS", 5: "Single", 6: "PPP"}
 
             win = tk.Toplevel(self.root)
             win.title("Distribuição de Qualidade PPK")
@@ -1091,11 +1104,11 @@ class AVGeoSysUI:
             fig = Figure(figsize=(8, 5.5), facecolor=BG_DARK, tight_layout=True)
             ax = fig.add_subplot(111, facecolor=BG_PANEL)
 
-            for q in (1, 2, 3):
+            for q in (1, 2, 3, 4, 5, 6):
                 pts = [(r["longitude"], r["latitude"]) for r in data if r.get("quality") == q]
                 if not pts:
                     continue
-                color = {1: ACCENT_PPK, 2: "#FFA500", 3: STATUS_ERR}[q]
+                color = {1: ACCENT_PPK, 2: "#FFA500", 3: "#2196F3", 4: "#9C27B0", 5: STATUS_ERR, 6: "#1565C0"}.get(q, "#888888")
                 lons, lats = zip(*pts)
                 ax.scatter(
                     lons, lats,

@@ -39,7 +39,7 @@ SAMPLE_DATA = [
         "latitude": -15.7780,
         "longitude": -47.9180,
         "height": 1050.000,
-        "quality": 3,
+        "quality": 5,  # Single — fora da janela .pos
     },
 ]
 
@@ -56,13 +56,13 @@ def test_report_contains_quality_labels(tmp_path):
     content = Path(report_txt).read_text(encoding="utf-8")
     assert "Fixed" in content
     assert "Float" in content
-    assert "Unknown" in content
+    assert "Single" in content  # Q=5 — GPS autônomo
 
 
 def test_report_contains_percentages(tmp_path):
     report_txt, _, _ = generate_report_and_kmz(SAMPLE_DATA, tmp_path)
     content = Path(report_txt).read_text(encoding="utf-8")
-    # 4 photos: 2 Fixed=50%, 1 Float=25%, 1 Unknown=25%
+    # 4 photos: 2 Fixed=50%, 1 Float=25%, 1 Single=25%
     assert "50" in content or "50.0" in content
 
 

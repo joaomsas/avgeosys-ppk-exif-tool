@@ -3,12 +3,14 @@ RTKLIB wrapper — runs rnx2rtkp to produce .pos PPK solution files.
 """
 
 import logging
+import re
 import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from avgeosys import config
 
@@ -178,6 +180,89 @@ def _read_approx_xyz(rinex_path: Path) -> Optional[bytes]:
     return None
 
 
+def _read_rinex_time_range(rinex_path: Path) -> Optional[Tuple[datetime, datetime]]:
+    """Lê TIME OF FIRST OBS e TIME OF LAST OBS do cabeçalho RINEX.
+
+    Retorna (first_obs, last_obs) como datetime UTC, ou None se não encontrado.
+    """
+    first: Optional[datetime] = None
+    last: Optional[datetime] = None
+    try:
+        with open(rinex_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                if "END OF HEADER" in line:
+                    break
+                if "TIME OF FIRST OBS" in line:
+                    first = _parse_rinex_time_line(line)
+                elif "TIME OF LAST OBS" in line:
+                    last = _parse_rinex_time_line(line)
+    except OSError:
+        return None
+    if first is None:
+        return None
+    # TIME OF LAST OBS é opcional em alguns arquivos
+    return (first, last or first)
+
+
+def _parse_rinex_time_line(line: str) -> Optional[datetime]:
+    """Extrai datetime de uma linha TIME OF FIRST/LAST OBS do RINEX."""
+    # Formato: "  YYYY  MM  DD  HH  MM  SS.sssssss     SYS   TIME OF ... OBS"
+    m = re.match(
+        r"\s*(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+([\d.]+)",
+        line,
+    )
+    if not m:
+        return None
+    try:
+        year, month, day = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        hour, minute = int(m.group(4)), int(m.group(5))
+        sec_f = float(m.group(6))
+        second = int(sec_f)
+        return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+    except (ValueError, OverflowError):
+        return None
+
+
+def check_temporal_overlap(rover_obs: Path, base_obs: Path) -> Tuple[bool, str]:
+    """Verifica se rover e base RINEX têm sobreposição temporal.
+
+    Returns:
+        (ok, mensagem) — ok=True se há sobreposição, False caso contrário.
+        A mensagem descreve o problema ou confirma a sobreposição.
+    """
+    rover_range = _read_rinex_time_range(rover_obs)
+    base_range = _read_rinex_time_range(base_obs)
+
+    if rover_range is None:
+        return True, "Não foi possível ler TIME OF FIRST OBS do rover — prosseguindo sem verificação."
+    if base_range is None:
+        return True, "Não foi possível ler TIME OF FIRST OBS da base — prosseguindo sem verificação."
+
+    r_start, r_end = rover_range
+    b_start, b_end = base_range
+
+    # Há sobreposição se um dos intervalos começa antes do outro terminar
+    overlap = r_start <= b_end and b_start <= r_end
+    if not overlap:
+        return False, (
+            f"SEM SOBREPOSIÇÃO TEMPORAL entre rover e base!\n"
+            f"  Rover: {r_start.strftime('%Y-%m-%d %H:%M')} → {r_end.strftime('%Y-%m-%d %H:%M')}\n"
+            f"  Base:  {b_start.strftime('%Y-%m-%d %H:%M')} → {b_end.strftime('%Y-%m-%d %H:%M')}\n"
+            f"  O resultado será Single (GPS autônomo sem correção PPK)."
+        )
+
+    # Calcula minutos de sobreposição para aviso se for muito curto
+    overlap_start = max(r_start, b_start)
+    overlap_end = min(r_end, b_end)
+    overlap_minutes = (overlap_end - overlap_start).total_seconds() / 60
+    if overlap_minutes < 5:
+        return True, (
+            f"AVISO: sobreposição muito curta ({overlap_minutes:.1f} min) — "
+            f"Fix rate pode ser baixo."
+        )
+    return True, f"Sobreposição: {overlap_minutes:.0f} min OK."
+
+
 def _strip_rinex_padding(src: Path, dst: Path, approx_xyz: Optional[bytes] = None) -> None:
     """Copy a RINEX obs file to *dst* with DJI-specific fixes applied.
 
@@ -272,12 +357,28 @@ def process_single_folder(
         return None
 
     if not files["base_obs"]:
-        logger.warning(
-            "RINEX da estação base não encontrado para %s — PPK requer base+rover. "
-            "Coloque os arquivos .obs/.nav da base na raiz do projeto ou use --base-dir.",
+        logger.error(
+            "ERRO: RINEX da estação base não encontrado para %s.\n"
+            "  PPK requer base+rover. Sem a base, o resultado será Single "
+            "(GPS autônomo sem correção — coordenadas brutas, sem precisão PPK).\n"
+            "  Coloque os arquivos .obs/.nav da base na raiz do projeto ou use --base-dir.",
             folder.name,
         )
-        # Continua mesmo assim — rnx2rtkp processará em modo SPP (posicionamento simples)
+        # Continua — rnx2rtkp processará em modo Single (posicionamento simples)
+    else:
+        # Verificação de sobreposição temporal rover × base
+        ok, msg = check_temporal_overlap(files["rover_obs"], files["base_obs"])
+        if not ok:
+            logger.error(
+                "ERRO PPK em %s/%s: %s\n"
+                "  Corrija os arquivos de base antes de processar — "
+                "o resultado será Single (sem valor para levantamento).",
+                folder.parent.name, folder.name, msg,
+            )
+        elif "AVISO" in msg:
+            logger.warning("PPK %s/%s: %s", folder.parent.name, folder.name, msg)
+        else:
+            logger.debug("PPK %s/%s: %s", folder.parent.name, folder.name, msg)
 
     output_pos = folder / (folder.name + ".pos")
 
@@ -447,12 +548,13 @@ def process_all_folders(
 
 
 def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path] = None) -> None:
-    """Read all .pos files and log a quality summary (epochs, Fixed%, Float%)."""
-    total = fixed = float_ = unknown = 0
+    """Read all .pos files and log a quality summary with all RTKLIB quality codes."""
+    # RTKLIB quality codes: 1=Fixed, 2=Float, 3=SBAS, 4=DGPS, 5=Single, 6=PPP
+    total = fixed = float_ = single = other = 0
     per_folder = []
 
     for pos_path in sorted(pos_files):
-        f_total = f_fixed = f_float = f_unk = 0
+        f_total = f_fixed = f_float = f_single = f_other = 0
         try:
             with open(pos_path, encoding="utf-8", errors="replace") as fh:
                 for line in fh:
@@ -470,16 +572,19 @@ def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path]
                         f_fixed += 1
                     elif q == 2:
                         f_float += 1
+                    elif q == 5:
+                        f_single += 1
                     else:
-                        f_unk += 1
+                        f_other += 1
         except OSError:
             continue
 
         total += f_total
         fixed += f_fixed
         float_ += f_float
-        unknown += f_unk
-        # Caminho relativo à raiz do projeto para distinguir pastas com mesmo nome
+        single += f_single
+        other += f_other
+
         if project_path:
             try:
                 display = str(pos_path.parent.relative_to(project_path))
@@ -487,28 +592,48 @@ def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path]
                 display = f"{pos_path.parent.parent.name}/{pos_path.parent.name}"
         else:
             display = f"{pos_path.parent.parent.name}/{pos_path.parent.name}"
-        per_folder.append((display, f_total, f_fixed, f_float, f_unk))
+        per_folder.append((display, f_total, f_fixed, f_float, f_single, f_other))
 
     if total == 0:
         logger.warning("PPK summary: nenhuma época válida encontrada nos arquivos .pos")
         return
 
+    # Alerta crítico se Single domina — significa PPK sem correção diferencial
+    single_pct = single / total * 100 if total else 0
+    if single_pct > 50:
+        logger.error(
+            "=" * 70
+        )
+        logger.error(
+            "ATENÇÃO: %.0f%% das épocas são SINGLE (GPS autônomo, sem correção PPK)!",
+            single_pct,
+        )
+        logger.error(
+            "  Verifique se o arquivo de base cobre o período de voo."
+        )
+        logger.error(
+            "=" * 70
+        )
+
     logger.info(
-        "PPK summary — %d pastas  |  %d épocas totais  |  "
-        "Fixed: %d (%.1f%%)  Float: %d (%.1f%%)  Other: %d (%.1f%%)",
-        len(pos_files),
-        total,
-        fixed, fixed / total * 100,
+        "PPK summary — %d pasta(s)  |  %d épocas  |  "
+        "Fixed: %d (%.1f%%)  Float: %d (%.1f%%)  Single: %d (%.1f%%)  Outros: %d (%.1f%%)",
+        len(pos_files), total,
+        fixed,  fixed  / total * 100,
         float_, float_ / total * 100,
-        unknown, unknown / total * 100,
+        single, single / total * 100,
+        other,  other  / total * 100,
     )
-    logger.info("%-52s  %7s  %8s  %8s", "Pasta", "Épocas", "Fixed%", "Float%")
-    logger.info("-" * 80)
-    for name, ft, ff, fl, fu in per_folder:
+    logger.info("%-52s  %7s  %8s  %8s  %8s", "Pasta", "Épocas", "Fixed%", "Float%", "Single%")
+    logger.info("-" * 90)
+    for name, ft, ff, fl, fs, fo in per_folder:
+        # Alerta por pasta se Single > 50%
+        flag = " ⚠ SINGLE" if (fs / ft * 100 if ft else 0) > 50 else ""
         logger.info(
-            "  %-50s  %7d  %7.1f%%  %7.1f%%",
-            name[:50],
-            ft,
+            "  %-50s  %7d  %7.1f%%  %7.1f%%  %7.1f%%%s",
+            name[:50], ft,
             ff / ft * 100 if ft else 0,
             fl / ft * 100 if ft else 0,
+            fs / ft * 100 if ft else 0,
+            flag,
         )

@@ -48,7 +48,7 @@ def test_full_pipeline(project):
     batch_update_exif(data, project)
 
     # Verify EXIF was written to in-range photos
-    in_range = [r for r in data if r["quality"] != 3]
+    in_range = [r for r in data if r["quality"] not in (5,)]  # excluir Single (fora do range)
     for rec in in_range:
         coords = extract_exif_coordinates(project / rec["filename"])
         assert coords is not None, f"No GPS EXIF in {rec['filename']}"
@@ -61,7 +61,7 @@ def test_full_pipeline(project):
     assert report_txt.exists()
     content = report_txt.read_text(encoding="utf-8")
     assert "Fixed" in content
-    assert "Float" in content
+    assert "Single" in content  # evento fora do range agora é Q=5
 
     assert kmz_interp.exists()
     assert zipfile.is_zipfile(kmz_interp)

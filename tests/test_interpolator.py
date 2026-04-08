@@ -84,9 +84,9 @@ def test_interpolate_positions_filenames():
 
 
 def test_interpolate_positions_out_of_range_quality():
-    """Event at 435000s is outside pos range → quality = 3."""
+    """Event at 435000s is outside pos range → quality = 5 (Single, no PPK correction)."""
     mrk_df = preprocess_and_read_mrk(DATA_DIR / "sample.MRK")
     pos_df = load_pos_data(DATA_DIR / "sample.pos")
     results = interpolate_positions(mrk_df, pos_df)
     out_of_range = next(r for r in results if r["filename"] == "DJI_0005_V.JPG")
-    assert out_of_range["quality"] == 3
+    assert out_of_range["quality"] == 5
