@@ -54,5 +54,8 @@ Logs/
 .claude/
 .specify/
 
+# Credenciais de serviço (nunca commitar)
+avgeosys/credentials/
+
 # Executável RTKLIB (binário de terceiro — obter em https://rtkexplorer.com/downloads/rtklib-qt/)
 rnx2rtkp.exe

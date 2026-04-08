@@ -13,6 +13,7 @@ a = Analysis(
     datas=[
         ('rnx2rtkp.exe', '.'),
         ('AVGeoSysIcon.ico', '.'),
+        ('avgeosys/credentials/gdrive.json', 'credentials'),
     ],
     hiddenimports=[
         'piexif',
@@ -21,6 +22,12 @@ a = Analysis(
         'numpy',
         'folium',
         'branca',
+        'google.auth',
+        'google.oauth2.credentials',
+        'google.auth.transport.requests',
+        'googleapiclient.discovery',
+        'googleapiclient.http',
+        'httplib2',
     ],
     hookspath=[],
     hooksconfig={},

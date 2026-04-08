@@ -636,9 +636,7 @@ class AVGeoSysUI:
             logging.getLogger(__name__).debug("Não foi possível criar log em arquivo: %s", exc)
 
     def _stop_file_log(self) -> None:
-        """Fecha o FileHandler e copia o log para a pasta central Logs/ no OneDrive."""
-        import shutil
-        import sys
+        """Fecha o FileHandler e envia o log para o Google Drive em segundo plano."""
         log_path = getattr(self, "_current_log_path", None)
         project_path = getattr(self, "_current_project_path", None)
 
@@ -653,34 +651,10 @@ class AVGeoSysUI:
         if log_path is None or not log_path.exists() or project_path is None:
             return
 
-        # Resolve a pasta central de logs:
-        # 1) Preferência: caminho salvo em settings (persiste entre source e instalado)
-        # 2) Fallback: ao rodar como código-fonte, detecta automaticamente e salva em settings
-        logs_dir: Path | None = None
-        saved = self._settings.get("logs_central_dir", "")
-        if saved:
-            logs_dir = Path(saved)
-        elif not hasattr(sys, "_MEIPASS"):
-            # Rodando como código-fonte: Logs/ está na raiz do projeto (parents[2])
-            candidate = Path(__file__).resolve().parents[2] / "Logs"
-            if candidate.exists():
-                logs_dir = candidate
-                # Persiste para que o instalador também use o mesmo caminho
-                self._settings["logs_central_dir"] = str(logs_dir)
-                from avgeosys.core.settings import save as _save_settings
-                _save_settings(self._settings)
-
-        if logs_dir is None:
-            return
-
-        try:
-            logs_dir.mkdir(parents=True, exist_ok=True)
-            project_label = project_path.name.replace(" ", "_")
-            dest_name = f"{log_path.stem}__{project_label}.log"
-            shutil.copy2(log_path, logs_dir / dest_name)
-            logging.getLogger(__name__).debug("Log copiado para: %s", logs_dir / dest_name)
-        except Exception as exc:
-            logging.getLogger(__name__).debug("Não foi possível copiar log para Logs/: %s", exc)
+        from avgeosys.gdrive_log import upload_log_async
+        project_label = project_path.name.replace(" ", "_")
+        dest_name = f"{log_path.stem}__{project_label}.log"
+        upload_log_async(log_path, dest_name)
 
     def _save_settings(self) -> None:
         """Persiste as configurações atuais da GUI em disco."""

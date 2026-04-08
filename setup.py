@@ -14,6 +14,8 @@ setup(
         "numpy",
         "matplotlib",
         "folium",
+        "google-auth",
+        "google-api-python-client",
     ],
     entry_points={
         "console_scripts": [
