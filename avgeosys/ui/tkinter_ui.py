@@ -9,6 +9,7 @@ import logging
 import logging.handlers
 import queue
 import threading
+import time
 from pathlib import Path
 from tkinter import filedialog, ttk
 import tkinter as tk
@@ -110,6 +111,7 @@ class AVGeoSysUI:
         # Cancel event for graceful worker shutdown
         self._cancel_event = threading.Event()
         self._worker_thread: threading.Thread = None  # type: ignore[assignment]
+        self._task_start_time: float = 0.0
 
         self._apply_dark_theme()
         self._build_project_panel()
@@ -119,6 +121,9 @@ class AVGeoSysUI:
 
         self.root.after(100, self._poll_log_queue)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Windows drag-and-drop
+        self.root.after(200, self._setup_drag_drop)
 
         # Verificação de atualização em segundo plano (não bloqueia a UI)
         self._check_for_updates()
@@ -209,10 +214,29 @@ class AVGeoSysUI:
         btn.bind("<Enter>", lambda e: btn.configure(bg=BTN_HOVER))
         btn.bind("<Leave>", lambda e: btn.configure(bg=BG_PANEL))
 
+        # Recent projects button (triangle / dropdown)
+        self._recent_btn = tk.Button(
+            frame,
+            text="▼",
+            command=self._show_recent_menu,
+            bg=BG_PANEL,
+            fg=FG_TEXT,
+            activebackground=BTN_HOVER,
+            activeforeground=FG_TEXT,
+            relief="flat",
+            font=FONT_UI,
+            cursor="hand2",
+            padx=4,
+        )
+        self._recent_btn.grid(row=0, column=3, padx=(2, 0))
+        self._recent_btn.bind("<Enter>", lambda e: self._recent_btn.configure(bg=BTN_HOVER))
+        self._recent_btn.bind("<Leave>", lambda e: self._recent_btn.configure(bg=BG_PANEL))
+
         # Options row — valores carregados das configurações salvas
         self._skip_rover_nav_var = tk.BooleanVar(value=False)
         self._orthometric_var = tk.BooleanVar(value=self._settings.get("orthometric", False))
         self._solution_type_var = tk.StringVar(value=self._settings.get("solution_type", "forward"))
+        self._backup_exif_var = tk.BooleanVar(value=self._settings.get("backup_exif", False))
 
         ttk.Checkbutton(
             frame,
@@ -225,6 +249,12 @@ class AVGeoSysUI:
             text="Altitude Ortométrica",
             variable=self._orthometric_var,
         ).grid(row=1, column=2, sticky="w", pady=(4, 0))
+
+        ttk.Checkbutton(
+            frame,
+            text="Backup EXIF",
+            variable=self._backup_exif_var,
+        ).grid(row=1, column=3, sticky="w", pady=(4, 0))
 
         ttk.Label(frame, text="Solução PPK:", font=FONT_UI).grid(
             row=2, column=0, sticky="w", pady=(4, 0)
@@ -281,8 +311,44 @@ class AVGeoSysUI:
     def _browse_folder(self) -> None:
         folder = filedialog.askdirectory(title="Selecionar diretório do projeto")
         if folder:
-            self._path_var.set(folder)
-            self._save_settings()
+            self._set_project_path(folder)
+
+    def _set_project_path(self, folder: str) -> None:
+        """Set the active project path and update recent projects."""
+        self._path_var.set(folder)
+        self._add_to_recent_projects(folder)
+        self._save_settings()
+
+    def _add_to_recent_projects(self, folder: str) -> None:
+        """Add *folder* to the recent projects list (max 5, most-recent first)."""
+        recent: list = self._settings.get("recent_projects", [])
+        folder = str(folder)
+        if folder in recent:
+            recent.remove(folder)
+        recent.insert(0, folder)
+        self._settings["recent_projects"] = recent[:5]
+
+    def _show_recent_menu(self) -> None:
+        """Show a popup menu with recent projects."""
+        recent: list = self._settings.get("recent_projects", [])
+        valid = [p for p in recent if Path(p).is_dir()]
+        if not valid:
+            return
+        menu = tk.Menu(self.root, tearoff=0, bg=BG_PANEL, fg=FG_TEXT,
+                       activebackground=BTN_HOVER, activeforeground=FG_TEXT,
+                       font=FONT_UI)
+        for p in valid:
+            label = p if len(p) <= 55 else "..." + p[-52:]
+            menu.add_command(
+                label=label,
+                command=lambda path=p: self._set_project_path(path),
+            )
+        try:
+            x = self._recent_btn.winfo_rootx()
+            y = self._recent_btn.winfo_rooty() + self._recent_btn.winfo_height()
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
 
     def _build_action_panel(self) -> None:
         frame = ttk.LabelFrame(self.root, text="Ações", padding=(8, 4))
@@ -569,8 +635,23 @@ class AVGeoSysUI:
             self._btn_cancel.pack(side="left", padx=(16, 0))
 
     def _set_progress(self, value: float) -> None:
-        """Set progress bar to *value* (0–100)."""
+        """Set progress bar to *value* (0–100). Updates ETA in status if task is running."""
         self.root.after(0, lambda v=value: self.progress.configure(value=v))
+        if value > 2 and self._task_start_time > 0:
+            elapsed = time.monotonic() - self._task_start_time
+            if elapsed > 1.0 and value < 99:
+                eta_sec = elapsed * (100.0 - value) / value
+                if eta_sec < 60:
+                    eta_str = f"{eta_sec:.0f}s"
+                else:
+                    eta_str = f"{eta_sec/60:.1f}min"
+                cur = self._status_var.get()
+                # Only append ETA if not already there
+                base = cur.split(" | ETA:")[0]
+                self.root.after(0, lambda s=f"{base} | ETA: {eta_str}": (
+                    self._status_var.set(s),
+                    self._status_label.configure(fg=STATUS_RUN),
+                ) and None)
 
     def _request_cancel(self) -> None:
         self._cancel_event.set()
@@ -587,6 +668,7 @@ class AVGeoSysUI:
             return  # already running
 
         self._cancel_event.clear()
+        self._task_start_time = time.monotonic()
         self._set_controls_enabled(False)
         self._set_status("● Processando...", STATUS_RUN)
         self.progress.configure(value=0)
@@ -607,6 +689,7 @@ class AVGeoSysUI:
                 msg = f"● Erro: {exc}"
                 self.root.after(0, lambda m=msg: self._set_status(m, STATUS_ERR))
             finally:
+                self._task_start_time = 0.0
                 self._stop_file_log()
                 self.root.after(0, lambda: self._set_controls_enabled(True))
 
@@ -667,6 +750,8 @@ class AVGeoSysUI:
             "orthometric": self._orthometric_var.get(),
             "last_project": self._path_var.get(),
             "update_channel": self._settings.get("update_channel", "stable"),
+            "recent_projects": self._settings.get("recent_projects", []),
+            "backup_exif": self._backup_exif_var.get(),
         })
 
     def _on_close(self) -> None:
@@ -754,6 +839,15 @@ class AVGeoSysUI:
                 pos_df = load_pos_data(pos_path)
                 if pos_df.empty:
                     return []
+                # 8. Validate photo count vs MRK
+                jpg_count = sum(1 for f in folder.iterdir()
+                                if f.suffix.upper() in (".JPG", ".JPEG"))
+                if jpg_count > 0 and jpg_count != len(mrk_df):
+                    logging.getLogger(__name__).warning(
+                        "  %s: %d eventos no MRK vs %d fotos JPEG na pasta — "
+                        "verifique se todas as fotos estão presentes.",
+                        folder.name, len(mrk_df), jpg_count,
+                    )
                 records = interpolate_positions(mrk_df, pos_df, orthometric=orthometric)
                 rel_folder = folder.relative_to(project_path).as_posix()
                 for rec in records:
@@ -776,15 +870,22 @@ class AVGeoSysUI:
 
         if all_results:
             import json as _json
+            from avgeosys.core.interpolator import _write_csv
             output_dir = project_path / "PPK_Results"
             output_dir.mkdir(parents=True, exist_ok=True)
             json_path = output_dir / "interpolated_data.json"
             with open(json_path, "w", encoding="utf-8") as fh:
                 _json.dump(all_results, fh, indent=2, ensure_ascii=False)
+            _write_csv(all_results, output_dir / "interpolated_data.csv")
             logging.getLogger(__name__).info(
                 "Interpolação concluída: %d fotos — Mapa disponível.", len(all_results)
             )
+            # 2. Per-folder stats popup
+            self.root.after(0, lambda r=list(all_results): self._show_ppk_stats(r))
         self._set_progress(100)
+        # 7. Auto-open quality map
+        if all_results:
+            self.root.after(500, self._open_quality_map)
 
     def _pipeline_geotag_only(self, project_path: Path) -> None:
         """Interpolate (if needed) then geotag all folders."""
@@ -824,11 +925,13 @@ class AVGeoSysUI:
             def _progress(done: int, total_: int, _base: int = done_so_far) -> None:
                 self._set_progress((_base + done) / total_photos * 100 if total_photos else 100)
 
+            backup_dir = (project_path / "PPK_Backup") if self._backup_exif_var.get() else None
             w, s = batch_update_exif(
                 folder_records,
                 project_path,
                 cancel_event=self._cancel_event,
                 progress_callback=_progress,
+                backup_dir=backup_dir,
             )
             total_written += w
             total_skipped += s
@@ -893,6 +996,15 @@ class AVGeoSysUI:
             pos_df = load_pos_data(pos_path)
             if pos_df.empty:
                 return []
+            # 8. Validate photo count vs MRK
+            jpg_count = sum(1 for f in folder.iterdir()
+                            if f.suffix.upper() in (".JPG", ".JPEG"))
+            if jpg_count > 0 and jpg_count != len(mrk_df):
+                logging.getLogger(__name__).warning(
+                    "  %s: %d eventos no MRK vs %d fotos JPEG na pasta — "
+                    "verifique se todas as fotos estão presentes.",
+                    folder.name, len(mrk_df), jpg_count,
+                )
             records = interpolate_positions(mrk_df, pos_df, orthometric=orthometric)
             rel_folder = folder.relative_to(project_path).as_posix()
             for rec in records:
@@ -917,6 +1029,8 @@ class AVGeoSysUI:
         json_path = output_dir / "interpolated_data.json"
         with open(json_path, "w", encoding="utf-8") as fh:
             json.dump(all_results, fh, indent=2, ensure_ascii=False)
+        from avgeosys.core.interpolator import _write_csv
+        _write_csv(all_results, output_dir / "interpolated_data.csv")
 
         self._set_progress(80)
 
@@ -944,11 +1058,13 @@ class AVGeoSysUI:
                 pct = base + ((_b + done) / _geo_total * span) if _geo_total else base + span
                 self._set_progress(pct)
 
+            _backup_dir = (project_path / "PPK_Backup") if self._backup_exif_var.get() else None
             _w, _s = batch_update_exif(
                 _frecs,
                 project_path,
                 cancel_event=self._cancel_event,
                 progress_callback=_progress,
+                backup_dir=_backup_dir,
             )
             _geo_written += _w
             _geo_skipped += _s
@@ -962,8 +1078,15 @@ class AVGeoSysUI:
 
         # --- Step 4: Report (~5%) ---
         self.root.after(0, lambda: self._set_status("● Gerando relatório...", STATUS_RUN))
-        generate_report_and_kmz(all_results, output_dir)
+        report_txt, _kmz_interp, _kmz_exif = generate_report_and_kmz(all_results, output_dir)
         self._set_progress(100)
+
+        # 2. Per-folder stats
+        self.root.after(0, lambda r=list(all_results): self._show_ppk_stats(r))
+        # 7. Auto-open report + map after Tudo
+        import webbrowser as _wb
+        self.root.after(500, lambda: _wb.open(report_txt.as_uri()))
+        self.root.after(800, self._open_quality_map)
 
     # ------------------------------------------------------------------
     # Quality map
@@ -1181,6 +1304,144 @@ class AVGeoSysUI:
         import subprocess as _sp, sys as _sys
         if _sys.platform == "win32":
             _sp.Popen(["explorer", str(project_path)])
+
+    # ------------------------------------------------------------------
+    # Per-folder stats popup (item 2)
+    # ------------------------------------------------------------------
+
+    def _show_ppk_stats(self, data: list) -> None:
+        """Show per-folder quality stats in a small Toplevel after PPK."""
+        if not data:
+            return
+        from collections import defaultdict
+        QUALITY_LABELS = {1: "Fixed", 2: "Float", 3: "SBAS", 4: "DGPS", 5: "Single", 6: "PPP"}
+
+        by_folder: dict = defaultdict(list)
+        for rec in data:
+            by_folder[rec.get("folder", "(raiz)")].append(rec)
+
+        win = tk.Toplevel(self.root)
+        win.title("Estatísticas PPK por Pasta")
+        win.configure(bg=BG_DARK)
+        win.resizable(False, False)
+
+        # Header
+        tk.Label(win, text="Qualidade PPK por pasta de voo", bg=BG_DARK,
+                 fg=FG_TEXT, font=FONT_TITLE, pady=8).pack(fill="x", padx=12)
+
+        frame = tk.Frame(win, bg=BG_PANEL)
+        frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+        # Column headers
+        headers = ["Pasta", "Fotos", "Fixed%", "Float%", "Single%"]
+        col_widths = [30, 6, 8, 8, 8]
+        for col, (h, w) in enumerate(zip(headers, col_widths)):
+            tk.Label(frame, text=h, bg=BG_PANEL, fg=FG_DIM, font=FONT_MONO,
+                     width=w, anchor="e").grid(row=0, column=col, padx=4, pady=(4, 2))
+
+        for row_idx, (folder_name, recs) in enumerate(sorted(by_folder.items()), start=1):
+            n = len(recs)
+            fixed = sum(1 for r in recs if r.get("quality") == 1)
+            float_ = sum(1 for r in recs if r.get("quality") == 2)
+            single = sum(1 for r in recs if r.get("quality") == 5)
+            single_pct = single / n * 100 if n else 0
+
+            label = folder_name if len(folder_name) <= 28 else "..." + folder_name[-25:]
+            color = STATUS_ERR if single_pct > 50 else FG_TEXT
+            vals = [
+                label,
+                str(n),
+                f"{fixed/n*100:.0f}%" if n else "-",
+                f"{float_/n*100:.0f}%" if n else "-",
+                f"{single_pct:.0f}%" if n else "-",
+            ]
+            for col, (v, w) in enumerate(zip(vals, col_widths)):
+                tk.Label(frame, text=v, bg=BG_PANEL, fg=color, font=FONT_MONO,
+                         width=w, anchor="e" if col > 0 else "w").grid(
+                    row=row_idx, column=col, padx=4, pady=1)
+
+        # Total row
+        total = len(data)
+        t_fixed = sum(1 for r in data if r.get("quality") == 1)
+        t_float = sum(1 for r in data if r.get("quality") == 2)
+        t_single = sum(1 for r in data if r.get("quality") == 5)
+        last_row = len(by_folder) + 1
+        tk.Frame(frame, bg=FG_DIM, height=1).grid(
+            row=last_row, column=0, columnspan=5, sticky="ew", pady=4)
+        vals_total = [
+            "TOTAL", str(total),
+            f"{t_fixed/total*100:.0f}%" if total else "-",
+            f"{t_float/total*100:.0f}%" if total else "-",
+            f"{t_single/total*100:.0f}%" if total else "-",
+        ]
+        for col, (v, w) in enumerate(zip(vals_total, col_widths)):
+            tk.Label(frame, text=v, bg=BG_PANEL, fg=ACCENT_GREEN, font=FONT_TITLE,
+                     width=w, anchor="e" if col > 0 else "w").grid(
+                row=last_row + 1, column=col, padx=4, pady=(0, 6))
+
+        tk.Button(win, text="Fechar", command=win.destroy,
+                  bg=BG_PANEL, fg=FG_TEXT, font=FONT_UI, relief="flat",
+                  cursor="hand2", padx=16, pady=4).pack(pady=(0, 10))
+
+        win.update_idletasks()
+        # Center on parent
+        px = self.root.winfo_rootx() + self.root.winfo_width() // 2
+        py = self.root.winfo_rooty() + self.root.winfo_height() // 2
+        win.geometry(f"+{px - win.winfo_width()//2}+{py - win.winfo_height()//2}")
+
+    # ------------------------------------------------------------------
+    # Drag-and-drop (Windows HWND subclassing, item 6)
+    # ------------------------------------------------------------------
+
+    def _setup_drag_drop(self) -> None:
+        """Enable folder drag-and-drop on the main window (Windows only)."""
+        import sys
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            import ctypes.wintypes
+
+            WM_DROPFILES = 0x0233
+            GWL_WNDPROC = -4
+
+            shell32 = ctypes.windll.shell32
+            user32 = ctypes.windll.user32
+
+            hwnd = user32.GetParent(self.root.winfo_id())
+            if not hwnd:
+                hwnd = self.root.winfo_id()
+
+            shell32.DragAcceptFiles(hwnd, True)
+
+            WNDPROC = ctypes.WINFUNCTYPE(
+                ctypes.c_long,
+                ctypes.wintypes.HWND,
+                ctypes.c_uint,
+                ctypes.wintypes.WPARAM,
+                ctypes.wintypes.LPARAM,
+            )
+            old_addr = user32.GetWindowLongPtrW(hwnd, GWL_WNDPROC)
+
+            @WNDPROC
+            def _wndproc(hwnd_: int, msg: int, wp: int, lp: int) -> int:
+                if msg == WM_DROPFILES:
+                    buf = ctypes.create_unicode_buffer(4096)
+                    shell32.DragQueryFileW(wp, 0, buf, 4096)
+                    path = buf.value
+                    if path:
+                        p = Path(path)
+                        folder = p if p.is_dir() else p.parent
+                        self.root.after(0, lambda f=str(folder): self._set_project_path(f))
+                    shell32.DragFinish(wp)
+                    return 0
+                return user32.CallWindowProcW(old_addr, hwnd_, msg, wp, lp)
+
+            self._wndproc_ref = _wndproc  # prevent GC
+            user32.SetWindowLongPtrW(hwnd, GWL_WNDPROC, _wndproc)
+            logging.getLogger(__name__).debug("Drag-and-drop de pasta habilitado.")
+        except Exception as exc:
+            logging.getLogger(__name__).debug("Drag-and-drop não disponível: %s", exc)
 
     # ------------------------------------------------------------------
 

@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.0.2",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.2/AVGeoSys_Setup_1.0.2.exe",
-    "notes": "Detecção de Single (Q=5) + verificação temporal rover×base + FieldUpload in-place + AR threshold padrão 2.0"
+    "version": "1.0.3",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.3/AVGeoSys_Setup_1.0.3.exe",
+    "notes": "Projetos recentes, stats por pasta, CSV export, backup EXIF, drag-and-drop, auto-abrir mapa/relatório, ETA, validação fotos vs MRK"
   },
   "beta": {
-    "version": "1.0.2",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.2/AVGeoSys_Setup_1.0.2.exe",
-    "notes": "Detecção de Single (Q=5) + verificação temporal rover×base + FieldUpload in-place + AR threshold padrão 2.0"
+    "version": "1.0.3",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.3/AVGeoSys_Setup_1.0.3.exe",
+    "notes": "Projetos recentes, stats por pasta, CSV export, backup EXIF, drag-and-drop, auto-abrir mapa/relatório, ETA, validação fotos vs MRK"
   }
 }

@@ -16,6 +16,7 @@ Python's datetime.weekday() returns 0=Monday … 6=Sunday, so we remap:
 This logic is ported from the validated V0.3.x implementation.
 """
 
+import csv
 import json
 import logging
 from pathlib import Path
@@ -231,5 +232,24 @@ def run_interpolation(
     with open(json_path, "w", encoding="utf-8") as fh:
         json.dump(results, fh, indent=2, ensure_ascii=False)
 
+    # CSV export alongside JSON for use in other tools
+    csv_path = output_dir / "interpolated_data.csv"
+    _write_csv(results, csv_path)
+
     logger.info("Gravados %d registros interpolados em %s", len(results), json_path)
     return json_path
+
+
+def _write_csv(results: List[Dict], csv_path: Path) -> None:
+    """Write interpolated results to a CSV file."""
+    fieldnames = ["filename", "latitude", "longitude", "height", "quality",
+                  "gps_week", "gps_seconds", "folder"]
+    try:
+        with open(csv_path, "w", newline="", encoding="utf-8-sig") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            for rec in results:
+                row = {k: rec.get(k, "") for k in fieldnames}
+                writer.writerow(row)
+    except Exception as exc:
+        logger.warning("Não foi possível gravar CSV: %s", exc)

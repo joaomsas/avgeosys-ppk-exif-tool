@@ -2,7 +2,7 @@
 ; Gera: dist\installer\AVGeoSys_Setup_1.0.0.exe
 
 #define AppName      "AVGeoSys"
-#define AppVersion   "1.0.2"
+#define AppVersion   "1.0.3"
 #define AppPublisher "João Marcos Rezende Sasdelli Gonçalves"
 #define AppExeName   "AVGeoSys.exe"
 #define SourceDir    "dist\AVGeoSys"
@@ -15,7 +15,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 OutputDir=dist\installer
-OutputBaseFilename=AVGeoSys_Setup_1.0.2
+OutputBaseFilename=AVGeoSys_Setup_1.0.3
 SetupIconFile=AVGeoSysIcon.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 Compression=lzma2/ultra64

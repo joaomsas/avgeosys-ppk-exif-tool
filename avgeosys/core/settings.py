@@ -22,6 +22,8 @@ DEFAULTS: Dict[str, Any] = {
     "orthometric": False,
     "last_project": "",
     "update_channel": "stable",  # "stable" | "beta"
+    "recent_projects": [],       # list of recent project paths (up to 5)
+    "backup_exif": False,        # backup original JPEGs before geotagging
 }
 
 
