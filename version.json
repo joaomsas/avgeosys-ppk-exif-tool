@@ -2,11 +2,11 @@
   "stable": {
     "version": "1.0.0",
     "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.0/AVGeoSys_Setup_1.0.0.exe",
-    "notes": "Versão estável inicial"
+    "notes": "Versão estável inicial — pipeline completo PPK + EXIF + KMZ"
   },
   "beta": {
     "version": "1.0.0",
     "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.0/AVGeoSys_Setup_1.0.0.exe",
-    "notes": "Versão estável inicial"
+    "notes": "Versão estável inicial — pipeline completo PPK + EXIF + KMZ"
   }
 }
