@@ -641,17 +641,19 @@ class AVGeoSysUI:
             elapsed = time.monotonic() - self._task_start_time
             if elapsed > 1.0 and value < 99:
                 eta_sec = elapsed * (100.0 - value) / value
-                if eta_sec < 60:
-                    eta_str = f"{eta_sec:.0f}s"
-                else:
-                    eta_str = f"{eta_sec/60:.1f}min"
-                cur = self._status_var.get()
-                # Only append ETA if not already there
-                base = cur.split(" | ETA:")[0]
-                self.root.after(0, lambda s=f"{base} | ETA: {eta_str}": (
-                    self._status_var.set(s),
-                    self._status_label.configure(fg=STATUS_RUN),
-                ) and None)
+                eta_str = f"{eta_sec:.0f}s" if eta_sec < 60 else f"{eta_sec/60:.1f}min"
+                # Thread-safe: schedule Tk operations on main thread only
+                self.root.after(0, lambda e=eta_str: self._apply_eta(e))
+
+    def _apply_eta(self, eta_str: str) -> None:
+        """Apply ETA to status label — must be called in main thread via root.after."""
+        try:
+            cur = self._status_var.get()
+            base = cur.split(" | ETA:")[0]
+            self._status_var.set(f"{base} | ETA: {eta_str}")
+            self._status_label.configure(fg=STATUS_RUN)
+        except Exception:
+            pass
 
     def _request_cancel(self) -> None:
         self._cancel_event.set()
@@ -1408,32 +1410,46 @@ class AVGeoSysUI:
             shell32 = ctypes.windll.shell32
             user32 = ctypes.windll.user32
 
+            # Set correct restype for 64-bit Windows (LRESULT = pointer-sized signed int)
+            user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
+            user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
+            user32.CallWindowProcW.restype = ctypes.c_ssize_t
+
             hwnd = user32.GetParent(self.root.winfo_id())
             if not hwnd:
                 hwnd = self.root.winfo_id()
+            if not hwnd:
+                return
 
             shell32.DragAcceptFiles(hwnd, True)
 
+            old_addr = user32.GetWindowLongPtrW(hwnd, GWL_WNDPROC)
+            if not old_addr:
+                return  # Could not get old wndproc — skip subclassing
+
+            # LRESULT must be c_ssize_t (64-bit) on x64 Windows, NOT c_long (32-bit)
             WNDPROC = ctypes.WINFUNCTYPE(
-                ctypes.c_long,
+                ctypes.c_ssize_t,
                 ctypes.wintypes.HWND,
                 ctypes.c_uint,
                 ctypes.wintypes.WPARAM,
                 ctypes.wintypes.LPARAM,
             )
-            old_addr = user32.GetWindowLongPtrW(hwnd, GWL_WNDPROC)
 
             @WNDPROC
             def _wndproc(hwnd_: int, msg: int, wp: int, lp: int) -> int:
                 if msg == WM_DROPFILES:
-                    buf = ctypes.create_unicode_buffer(4096)
-                    shell32.DragQueryFileW(wp, 0, buf, 4096)
-                    path = buf.value
-                    if path:
-                        p = Path(path)
-                        folder = p if p.is_dir() else p.parent
-                        self.root.after(0, lambda f=str(folder): self._set_project_path(f))
-                    shell32.DragFinish(wp)
+                    try:
+                        buf = ctypes.create_unicode_buffer(4096)
+                        shell32.DragQueryFileW(wp, 0, buf, 4096)
+                        path = buf.value
+                        if path:
+                            p = Path(path)
+                            folder = p if p.is_dir() else p.parent
+                            self.root.after(0, lambda f=str(folder): self._set_project_path(f))
+                        shell32.DragFinish(wp)
+                    except Exception:
+                        pass
                     return 0
                 return user32.CallWindowProcW(old_addr, hwnd_, msg, wp, lp)
 
