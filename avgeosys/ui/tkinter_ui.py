@@ -1121,7 +1121,6 @@ class AVGeoSysUI:
         try:
             import webbrowser
             import folium
-            from folium.plugins import MarkerCluster
 
             quality_labels = {1: "Fixed", 2: "Float", 3: "SBAS", 4: "DGPS", 5: "Single", 6: "PPP"}
             quality_colors = {1: "green", 2: "orange", 3: "blue", 4: "purple", 5: "red", 6: "darkblue"}
@@ -1137,7 +1136,14 @@ class AVGeoSysUI:
             center_lat = sum(r["latitude"] for r in data) / len(data)
             center_lon = sum(r["longitude"] for r in data) / len(data)
 
-            m = folium.Map(location=[center_lat, center_lon], zoom_start=15)
+            # CartoDB Positron: sem restrição de Referer (OSM bloqueia com 403),
+            # visual limpo, sem API key. Fallback para sem tiles se falhar.
+            try:
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=15,
+                               tiles="CartoDB positron")
+            except Exception:
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=15,
+                               tiles=None)
 
             # Alerta vermelho se Single domina
             single_alert = ""
@@ -1173,17 +1179,13 @@ class AVGeoSysUI:
             )
             m.get_root().html.add_child(folium.Element(title_html))
 
-            # Layer por qualidade
-            # Para missões grandes (>1000 pontos) usa MarkerCluster por layer —
-            # 10-50× mais rápido no browser que CircleMarker individual por ponto.
-            use_cluster = total > 1000
+            # Layer por qualidade — ponto a ponto, sem clustering
             for q, label in quality_labels.items():
                 color = quality_colors[q]
                 pts = [r for r in data if r.get("quality") == q]
                 if not pts:
                     continue
                 layer = folium.FeatureGroup(name=f"{label} ({len(pts)})")
-                target = MarkerCluster().add_to(layer) if use_cluster else layer
                 for r in pts:
                     folium.CircleMarker(
                         location=[r["latitude"], r["longitude"]],
@@ -1202,7 +1204,7 @@ class AVGeoSysUI:
                             max_width=280,
                         ),
                         tooltip=f"{r['filename']} [{label}]",
-                    ).add_to(target)
+                    ).add_to(layer)
                 layer.add_to(m)
 
             folium.LayerControl(collapsed=False).add_to(m)
@@ -1330,6 +1332,14 @@ class AVGeoSysUI:
         win.title("Estatísticas PPK por Pasta")
         win.configure(bg=BG_DARK)
         win.resizable(False, False)
+        try:
+            import sys as _sys
+            _base = Path(_sys._MEIPASS) if hasattr(_sys, "_MEIPASS") else Path(__file__).parent.parent.parent
+            _ico = _base / "AVGeoSysIcon.ico"
+            if _ico.exists():
+                win.iconbitmap(str(_ico))
+        except Exception:
+            pass
 
         # Header
         tk.Label(win, text="Qualidade PPK por pasta de voo", bg=BG_DARK,
