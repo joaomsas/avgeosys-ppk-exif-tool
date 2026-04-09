@@ -18,6 +18,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+# Número de workers I/O-bound para geotag (4× CPUs, máx 32)
+_EXIF_MAX_WORKERS: int = min(32, (os.cpu_count() or 4) * 4)
+
 import piexif
 
 logger = logging.getLogger(__name__)
@@ -146,23 +149,27 @@ def update_exif(
                 pass
             raise
 
-        # Verificação de leitura
+        # Verificação em memória — evita releitura do disco após gravação
         if verify:
-            result = extract_exif_coordinates(jpg_path)
-            if result is None:
+            try:
+                verify_dict = piexif.load(modified_jpeg)
+                verify_result = _extract_gps_from_exif_dict(verify_dict)
+            except Exception:
+                verify_result = None
+            if verify_result is None:
                 logger.warning(
                     "Verificação EXIF falhou (sem dados GPS) para %s", jpg_path.name
                 )
                 return False
             if (
-                abs(result["latitude"] - lat) > _VERIFY_TOLERANCE
-                or abs(result["longitude"] - lon) > _VERIFY_TOLERANCE
+                abs(verify_result["latitude"] - lat) > _VERIFY_TOLERANCE
+                or abs(verify_result["longitude"] - lon) > _VERIFY_TOLERANCE
             ):
                 logger.warning(
                     "Divergência EXIF em %s: gravado (%.7f, %.7f) lido (%.7f, %.7f)",
                     jpg_path.name,
                     lat, lon,
-                    result["latitude"], result["longitude"],
+                    verify_result["latitude"], verify_result["longitude"],
                 )
                 return False
 
@@ -173,24 +180,11 @@ def update_exif(
         return False
 
 
-def extract_exif_coordinates(jpg_path: Path) -> Optional[Dict[str, float]]:
-    """Lê latitude, longitude e altitude GPS do EXIF de um JPEG.
-
-    Returns:
-        Dict com chaves ``latitude``, ``longitude``, ``altitude``, ou ``None``
-        se não houver dados GPS.
-    """
-    jpg_path = Path(jpg_path)
-    try:
-        exif_dict = piexif.load(str(jpg_path))
-    except Exception as exc:
-        logger.warning("Não foi possível carregar EXIF de %s: %s", jpg_path, exc)
-        return None
-
+def _extract_gps_from_exif_dict(exif_dict: dict) -> Optional[Dict[str, float]]:
+    """Extrai coordenadas GPS de um exif_dict já carregado (sem I/O)."""
     gps = exif_dict.get("GPS", {})
     if not gps:
         return None
-
     try:
         lat = convert_from_dms(gps[piexif.GPSIFD.GPSLatitude])
         lat_ref = gps.get(piexif.GPSIFD.GPSLatitudeRef, b"N")
@@ -214,9 +208,28 @@ def extract_exif_coordinates(jpg_path: Path) -> Optional[Dict[str, float]]:
             alt = -alt
 
         return {"latitude": lat, "longitude": lon, "altitude": alt}
-    except (KeyError, ZeroDivisionError, TypeError) as exc:
-        logger.warning("EXIF GPS incompleto em %s: %s", jpg_path, exc)
+    except (KeyError, ZeroDivisionError, TypeError):
         return None
+
+
+def extract_exif_coordinates(jpg_path: Path) -> Optional[Dict[str, float]]:
+    """Lê latitude, longitude e altitude GPS do EXIF de um JPEG.
+
+    Returns:
+        Dict com chaves ``latitude``, ``longitude``, ``altitude``, ou ``None``
+        se não houver dados GPS.
+    """
+    jpg_path = Path(jpg_path)
+    try:
+        exif_dict = piexif.load(str(jpg_path))
+    except Exception as exc:
+        logger.warning("Não foi possível carregar EXIF de %s: %s", jpg_path, exc)
+        return None
+
+    result = _extract_gps_from_exif_dict(exif_dict)
+    if result is None:
+        logger.warning("EXIF GPS incompleto em %s", jpg_path)
+    return result
 
 
 def batch_update_exif(
@@ -279,15 +292,16 @@ def batch_update_exif(
             backup_dir=backup_dir,
         )
 
-    from avgeosys import config
-
     total = len(records)
     written = 0
     skipped = 0
     done = 0
     _last_reported = [0]
+    # Throttle: ~1% de progresso, entre 1 e 50 notificações por missão
+    _step = max(1, min(total // 100, 50))
 
-    with ThreadPoolExecutor(max_workers=config.MAX_WORKERS) as executor:
+    # EXIF tagging é I/O-bound: usa 4× CPUs (máx 32) em vez do padrão CPU-bound
+    with ThreadPoolExecutor(max_workers=_EXIF_MAX_WORKERS) as executor:
         futures = {executor.submit(_update, r): r["filename"] for r in records}
         for future in as_completed(futures):
             done += 1
@@ -300,10 +314,8 @@ def batch_update_exif(
             except Exception as exc:
                 skipped += 1
                 logger.warning("Falha ao atualizar EXIF de %s: %s", futures[future], exc)
-            # Throttle: notifica progresso a cada ~1% ou no mínimo a cada 50 arquivos
             if progress_callback is not None:
-                step = max(1, total // 100)
-                if done - _last_reported[0] >= step or done == total:
+                if done - _last_reported[0] >= _step or done == total:
                     progress_callback(done, total)
                     _last_reported[0] = done
 

@@ -284,42 +284,28 @@ def _strip_rinex_padding(src: Path, dst: Path, approx_xyz: Optional[bytes] = Non
     APPROX_TAG = b"APPROX POSITION XYZ"
     ZERO_XYZ = b"        0.0000        0.0000        0.0000"
 
-    with open(src, "rb") as fh:
-        raw = fh.read()
+    # Streaming: copia linha a linha sem carregar o arquivo inteiro em RAM.
+    # Importante para arquivos RINEX grandes (>50 MB em missões longas).
+    with open(src, "rb") as fh_in, open(dst, "wb") as fh_out:
+        in_header = True
+        skip_blanks = False
 
-    marker_pos = raw.find(MARKER)
-    if marker_pos == -1:
-        dst.write_bytes(raw)
-        return
-
-    eoh_line_end = raw.find(b"\n", marker_pos)
-    if eoh_line_end == -1:
-        dst.write_bytes(raw)
-        return
-
-    # Split into header lines and patch if needed
-    header_raw = raw[: eoh_line_end + 1]
-    if approx_xyz is not None and ZERO_XYZ in header_raw:
-        # Replace the APPROX POSITION XYZ line with the base station line
-        lines = header_raw.split(b"\n")
-        patched = []
-        for line in lines:
-            if APPROX_TAG in line and ZERO_XYZ in line:
-                patched.append(approx_xyz.rstrip(b"\r\n"))
+        for line in fh_in:
+            if in_header:
+                if approx_xyz is not None and APPROX_TAG in line and ZERO_XYZ in line:
+                    fh_out.write(approx_xyz.rstrip(b"\r\n") + b"\n")
+                else:
+                    fh_out.write(line)
+                if MARKER in line:
+                    in_header = False
+                    skip_blanks = True
+            elif skip_blanks:
+                if line.strip():
+                    skip_blanks = False
+                    fh_out.write(line)
+                # else: linha em branco de padding DJI — descarta
             else:
-                patched.append(line)
-        header_raw = b"\n".join(patched)
-
-    # Skip blank/whitespace-only content until the first epoch marker '>'
-    data_start = eoh_line_end + 1
-    while data_start < len(raw) and raw[data_start : data_start + 1] in (
-        b" ", b"\t", b"\r", b"\n",
-    ):
-        data_start += 1
-
-    with open(dst, "wb") as fh:
-        fh.write(header_raw)
-        fh.write(raw[data_start:])
+                fh_out.write(line)
 
 
 def process_single_folder(
@@ -327,6 +313,7 @@ def process_single_folder(
     config_override: dict,
     base_dir: Optional[Path] = None,
     solution_type: str = "forward",
+    _quality_out: Optional[dict] = None,
 ) -> Optional[Path]:
     """Run rnx2rtkp on a single folder and return the path to the .pos output.
 
@@ -465,8 +452,9 @@ def process_single_folder(
         )
         return None
 
-    # Valida que o .pos contém dados reais com campos suficientes
+    # Valida que o .pos contém dados reais e coleta quality stats na mesma leitura
     lines_with_data = 0
+    q_counts: Dict[int, int] = {}
     try:
         with open(output_pos, encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -475,6 +463,11 @@ def process_single_folder(
                 parts = line.split()
                 if len(parts) >= 6:
                     lines_with_data += 1
+                    try:
+                        q = int(parts[5])
+                        q_counts[q] = q_counts.get(q, 0) + 1
+                    except ValueError:
+                        pass
     except OSError:
         pass
 
@@ -484,6 +477,11 @@ def process_single_folder(
             folder.name,
         )
         return None
+
+    # Deposita stats de qualidade no acumulador (sem releitura em _log_ppk_quality_summary)
+    if _quality_out is not None and q_counts:
+        display = f"{folder.parent.name}/{folder.name}"
+        _quality_out[display] = {"epochs": lines_with_data, "counts": q_counts}
 
     logger.info("PPK concluído: %s/%s (%d épocas)", folder.parent.name, output_pos.name, lines_with_data)
     return output_pos
@@ -526,10 +524,15 @@ def process_all_folders(
     total = len(folders)
     done_count = 0
     results: List[Path] = []
+    # Acumulador de quality stats — preenchido por cada process_single_folder
+    # durante o passo de validação (sem releitura dos .pos)
+    quality_stats: Dict[str, dict] = {}
+
     with ThreadPoolExecutor(max_workers=config.MAX_WORKERS) as executor:
         futures = {
             executor.submit(
-                process_single_folder, f, config_override, effective_base_dir, solution_type
+                process_single_folder, f, config_override, effective_base_dir,
+                solution_type, quality_stats,
             ): f
             for f in folders
         }
@@ -542,19 +545,75 @@ def process_all_folders(
                 progress_callback(done_count, total)
 
     if results:
-        _log_ppk_quality_summary(results, project_path=project_path)
+        _log_ppk_quality_summary_from_stats(quality_stats)
 
     return results
 
 
-def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path] = None) -> None:
-    """Read all .pos files and log a quality summary with all RTKLIB quality codes."""
-    # RTKLIB quality codes: 1=Fixed, 2=Float, 3=SBAS, 4=DGPS, 5=Single, 6=PPP
+def _log_ppk_quality_summary_from_stats(quality_stats: Dict[str, dict]) -> None:
+    """Log quality summary using pre-collected stats — sem releitura de disco."""
     total = fixed = float_ = single = other = 0
     per_folder = []
 
+    for display in sorted(quality_stats):
+        entry = quality_stats[display]
+        ft = entry["epochs"]
+        counts = entry["counts"]
+        ff = counts.get(1, 0)
+        fl = counts.get(2, 0)
+        fs = counts.get(5, 0)
+        fo = ft - ff - fl - fs
+
+        total += ft
+        fixed += ff
+        float_ += fl
+        single += fs
+        other += fo
+        per_folder.append((display, ft, ff, fl, fs, fo))
+
+    if total == 0:
+        logger.warning("PPK summary: nenhuma época válida encontrada nos arquivos .pos")
+        return
+
+    single_pct = single / total * 100
+    if single_pct > 50:
+        logger.error("=" * 70)
+        logger.error(
+            "ATENÇÃO: %.0f%% das épocas são SINGLE (GPS autônomo, sem correção PPK)!",
+            single_pct,
+        )
+        logger.error("  Verifique se o arquivo de base cobre o período de voo.")
+        logger.error("=" * 70)
+
+    logger.info(
+        "PPK summary — %d pasta(s)  |  %d épocas  |  "
+        "Fixed: %d (%.1f%%)  Float: %d (%.1f%%)  Single: %d (%.1f%%)  Outros: %d (%.1f%%)",
+        len(per_folder), total,
+        fixed,  fixed  / total * 100,
+        float_, float_ / total * 100,
+        single, single / total * 100,
+        other,  other  / total * 100,
+    )
+    logger.info("%-52s  %7s  %8s  %8s  %8s", "Pasta", "Épocas", "Fixed%", "Float%", "Single%")
+    logger.info("-" * 90)
+    for name, ft, ff, fl, fs, fo in per_folder:
+        flag = " ⚠ SINGLE" if (fs / ft * 100 if ft else 0) > 50 else ""
+        logger.info(
+            "  %-50s  %7d  %7.1f%%  %7.1f%%  %7.1f%%%s",
+            name[:50], ft,
+            ff / ft * 100 if ft else 0,
+            fl / ft * 100 if ft else 0,
+            fs / ft * 100 if ft else 0,
+            flag,
+        )
+
+
+def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path] = None) -> None:
+    """Mantido para compatibilidade — relê os .pos e delega ao summary principal."""
+    quality_stats: Dict[str, dict] = {}
     for pos_path in sorted(pos_files):
-        f_total = f_fixed = f_float = f_single = f_other = 0
+        f_total = 0
+        q_counts: Dict[int, int] = {}
         try:
             with open(pos_path, encoding="utf-8", errors="replace") as fh:
                 for line in fh:
@@ -565,75 +624,19 @@ def _log_ppk_quality_summary(pos_files: List[Path], project_path: Optional[Path]
                         continue
                     try:
                         q = int(parts[5])
+                        q_counts[q] = q_counts.get(q, 0) + 1
+                        f_total += 1
                     except ValueError:
-                        continue
-                    f_total += 1
-                    if q == 1:
-                        f_fixed += 1
-                    elif q == 2:
-                        f_float += 1
-                    elif q == 5:
-                        f_single += 1
-                    else:
-                        f_other += 1
+                        pass
         except OSError:
             continue
-
-        total += f_total
-        fixed += f_fixed
-        float_ += f_float
-        single += f_single
-        other += f_other
-
-        if project_path:
-            try:
-                display = str(pos_path.parent.relative_to(project_path))
-            except ValueError:
+        if f_total:
+            if project_path:
+                try:
+                    display = str(pos_path.parent.relative_to(project_path))
+                except ValueError:
+                    display = f"{pos_path.parent.parent.name}/{pos_path.parent.name}"
+            else:
                 display = f"{pos_path.parent.parent.name}/{pos_path.parent.name}"
-        else:
-            display = f"{pos_path.parent.parent.name}/{pos_path.parent.name}"
-        per_folder.append((display, f_total, f_fixed, f_float, f_single, f_other))
-
-    if total == 0:
-        logger.warning("PPK summary: nenhuma época válida encontrada nos arquivos .pos")
-        return
-
-    # Alerta crítico se Single domina — significa PPK sem correção diferencial
-    single_pct = single / total * 100 if total else 0
-    if single_pct > 50:
-        logger.error(
-            "=" * 70
-        )
-        logger.error(
-            "ATENÇÃO: %.0f%% das épocas são SINGLE (GPS autônomo, sem correção PPK)!",
-            single_pct,
-        )
-        logger.error(
-            "  Verifique se o arquivo de base cobre o período de voo."
-        )
-        logger.error(
-            "=" * 70
-        )
-
-    logger.info(
-        "PPK summary — %d pasta(s)  |  %d épocas  |  "
-        "Fixed: %d (%.1f%%)  Float: %d (%.1f%%)  Single: %d (%.1f%%)  Outros: %d (%.1f%%)",
-        len(pos_files), total,
-        fixed,  fixed  / total * 100,
-        float_, float_ / total * 100,
-        single, single / total * 100,
-        other,  other  / total * 100,
-    )
-    logger.info("%-52s  %7s  %8s  %8s  %8s", "Pasta", "Épocas", "Fixed%", "Float%", "Single%")
-    logger.info("-" * 90)
-    for name, ft, ff, fl, fs, fo in per_folder:
-        # Alerta por pasta se Single > 50%
-        flag = " ⚠ SINGLE" if (fs / ft * 100 if ft else 0) > 50 else ""
-        logger.info(
-            "  %-50s  %7d  %7.1f%%  %7.1f%%  %7.1f%%%s",
-            name[:50], ft,
-            ff / ft * 100 if ft else 0,
-            fl / ft * 100 if ft else 0,
-            fs / ft * 100 if ft else 0,
-            flag,
-        )
+            quality_stats[display] = {"epochs": f_total, "counts": q_counts}
+    _log_ppk_quality_summary_from_stats(quality_stats)

@@ -130,20 +130,48 @@ def load_pos_data(pos_path: Path) -> pd.DataFrame:
     ``out-timeform=tow`` (GPS week + seconds-of-week) output formats.
     """
     pos_path = Path(pos_path)
+
+    # Leitura rápida: pd.read_csv filtra comentários e tokeniza em C
+    try:
+        raw = pd.read_csv(
+            pos_path,
+            sep=r"\s+",
+            comment="%",
+            header=None,
+            dtype=str,
+            on_bad_lines="skip",
+            encoding="utf-8",
+            encoding_errors="replace",
+        )
+        # Mantém apenas linhas com colunas suficientes (HMS=8+, TOW=7+)
+        raw = raw.dropna(thresh=7)
+    except Exception:
+        raw = None
+
     rows = []
-    with open(pos_path, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            line = line.strip()
-            if line.startswith("%") or not line:
-                continue
-            parts = line.split()
+    if raw is not None and not raw.empty:
+        for parts in raw.itertuples(index=False, name=None):
+            parts = [p for p in parts if pd.notna(p)]
             if len(parts) < 7:
                 continue
             try:
                 rows.append(_parse_pos_line(parts))
             except (ValueError, IndexError) as exc:
-                logger.warning("Ignorando linha .pos malformada: %r (%s)", line, exc)
-                continue
+                logger.warning("Ignorando linha .pos malformada: %r (%s)", parts, exc)
+    else:
+        # Fallback manual se pd.read_csv falhar
+        with open(pos_path, encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("%") or not line:
+                    continue
+                parts = line.split()
+                if len(parts) < 7:
+                    continue
+                try:
+                    rows.append(_parse_pos_line(parts))
+                except (ValueError, IndexError) as exc:
+                    logger.warning("Ignorando linha .pos malformada: %r (%s)", line, exc)
 
     df = pd.DataFrame(rows)
     return df
@@ -176,31 +204,37 @@ def interpolate_positions(
     pos_min = pos_t.min()
     pos_max = pos_t.max()
 
-    results = []
-    for _, row in mrk_df.iterrows():
-        t = float(row["gps_seconds"])
-        lat = float(np.interp(t, pos_t, pos_lat))
-        lon = float(np.interp(t, pos_t, pos_lon))
-        h = float(np.interp(t, pos_t, pos_h))
-        q = int(round(float(np.interp(t, pos_t, pos_q))))
+    # Vectorized interpolation — uma chamada por array em vez de N chamadas no loop
+    mrk_times = mrk_df["gps_seconds"].to_numpy()
+    lats = np.interp(mrk_times, pos_t, pos_lat)
+    lons = np.interp(mrk_times, pos_t, pos_lon)
+    heights = np.interp(mrk_times, pos_t, pos_h)
+    qualities = np.round(np.interp(mrk_times, pos_t, pos_q)).astype(int)
 
-        if t < pos_min or t > pos_max:
-            q = 5  # Single — evento fora da janela .pos (sem correção PPK)
+    # Eventos fora da janela .pos recebem Q=5 (Single)
+    out_of_range = (mrk_times < pos_min) | (mrk_times > pos_max)
+    qualities[out_of_range] = 5
 
-        if orthometric:
-            h = h - geoid_height(lat, lon)
-
-        results.append(
-            {
-                "filename": str(row["filename"]),
-                "gps_week": int(row["gps_week"]),
-                "gps_seconds": t,
-                "latitude": lat,
-                "longitude": lon,
-                "height": h,
-                "quality": q,
-            }
+    if orthometric:
+        heights = np.array(
+            [h - geoid_height(la, lo) for la, lo, h in zip(lats, lons, heights)]
         )
+
+    filenames = mrk_df["filename"].tolist()
+    gps_weeks = mrk_df["gps_week"].tolist()
+
+    results = [
+        {
+            "filename": str(filenames[i]),
+            "gps_week": int(gps_weeks[i]),
+            "gps_seconds": float(mrk_times[i]),
+            "latitude": float(lats[i]),
+            "longitude": float(lons[i]),
+            "height": float(heights[i]),
+            "quality": int(qualities[i]),
+        }
+        for i in range(len(mrk_times))
+    ]
 
     return results
 

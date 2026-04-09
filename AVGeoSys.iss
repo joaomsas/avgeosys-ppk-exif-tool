@@ -2,7 +2,7 @@
 ; Gera: dist\installer\AVGeoSys_Setup_1.0.0.exe
 
 #define AppName      "AVGeoSys"
-#define AppVersion   "1.0.4"
+#define AppVersion   "1.0.5"
 #define AppPublisher "João Marcos Rezende Sasdelli Gonçalves"
 #define AppExeName   "AVGeoSys.exe"
 #define SourceDir    "dist\AVGeoSys"
