@@ -1414,10 +1414,20 @@ class AVGeoSysUI:
             shell32 = ctypes.windll.shell32
             user32 = ctypes.windll.user32
 
-            # Set correct restype for 64-bit Windows (LRESULT = pointer-sized signed int)
+            # Tipos corretos para Windows 64-bit (LRESULT / LONG_PTR = pointer-sized)
             user32.GetWindowLongPtrW.restype = ctypes.c_ssize_t
             user32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
             user32.CallWindowProcW.restype = ctypes.c_ssize_t
+            # argtypes obrigatório: arg 1 de CallWindowProcW é WNDPROC (pointer-sized).
+            # Sem argtypes, ctypes converte para c_int (32-bit) → OverflowError em 64-bit
+            # → exceção ignorada → nenhuma mensagem Windows processada → janela trava.
+            user32.CallWindowProcW.argtypes = [
+                ctypes.c_ssize_t,        # lpPrevWndFunc (ponteiro de 64-bit)
+                ctypes.wintypes.HWND,
+                ctypes.c_uint,           # Msg
+                ctypes.wintypes.WPARAM,
+                ctypes.wintypes.LPARAM,
+            ]
 
             hwnd = user32.GetParent(self.root.winfo_id())
             if not hwnd:
