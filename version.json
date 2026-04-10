@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.0.4",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.4/AVGeoSys_Setup_1.0.4.exe",
-    "notes": "Hotfix: correcao de crash ao abrir (drag-and-drop WNDPROC 64-bit) + ETA thread-safe"
+    "version": "1.1.0",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.1.0/AVGeoSys_Setup_1.1.0.exe",
+    "notes": "Novo: Organizar Entrega SeeTree — agrupa voos por talhao, renomeia pastas e gera estrutura CS_FAZENDA_DATA automaticamente"
   },
   "beta": {
-    "version": "1.0.4",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.4/AVGeoSys_Setup_1.0.4.exe",
-    "notes": "Hotfix: correcao de crash ao abrir (drag-and-drop WNDPROC 64-bit) + ETA thread-safe"
+    "version": "1.1.0",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.1.0/AVGeoSys_Setup_1.1.0.exe",
+    "notes": "Novo: Organizar Entrega SeeTree — agrupa voos por talhao, renomeia pastas e gera estrutura CS_FAZENDA_DATA automaticamente"
   }
 }
