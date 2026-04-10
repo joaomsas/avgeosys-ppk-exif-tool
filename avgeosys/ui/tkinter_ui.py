@@ -449,12 +449,36 @@ class AVGeoSysUI:
             cursor="hand2",
             command=lambda: self._run_task(self._pipeline_fieldupload),
         )
-        self._btn_upload.pack(side="left")
+        self._btn_upload.pack(side="left", padx=(0, 8))
         self._btn_upload.bind(
             "<Enter>", lambda e: self._btn_upload.configure(bg=_darken(ACCENT_UPLOAD))
         )
         self._btn_upload.bind(
             "<Leave>", lambda e: self._btn_upload.configure(bg=ACCENT_UPLOAD)
+        )
+
+        # SeeTree Delivery button
+        ACCENT_DELIVERY = "#4a6b2a"
+        self._btn_delivery = tk.Button(
+            frame,
+            text="🌿 SeeTree",
+            bg=ACCENT_DELIVERY,
+            fg="#ffffff",
+            activebackground=_darken(ACCENT_DELIVERY),
+            activeforeground="#ffffff",
+            font=FONT_TITLE,
+            padx=16,
+            pady=8,
+            relief="flat",
+            cursor="hand2",
+            command=self._open_delivery_dialog,
+        )
+        self._btn_delivery.pack(side="left")
+        self._btn_delivery.bind(
+            "<Enter>", lambda e: self._btn_delivery.configure(bg=_darken(ACCENT_DELIVERY))
+        )
+        self._btn_delivery.bind(
+            "<Leave>", lambda e: self._btn_delivery.configure(bg=ACCENT_DELIVERY)
         )
 
         # Cancel button — visible only during processing
@@ -482,7 +506,7 @@ class AVGeoSysUI:
 
         self._action_buttons = [
             self._btn_ppk, self._btn_geotag, self._btn_all,
-            self._btn_map, self._btn_upload,
+            self._btn_map, self._btn_upload, self._btn_delivery,
         ]
 
     def _build_progress_status(self) -> None:
@@ -1312,6 +1336,261 @@ class AVGeoSysUI:
         import subprocess as _sp, sys as _sys
         if _sys.platform == "win32":
             _sp.Popen(["explorer", str(project_path)])
+
+    # ------------------------------------------------------------------
+    # SeeTree Delivery
+    # ------------------------------------------------------------------
+
+    def _open_delivery_dialog(self) -> None:
+        """Abre o diálogo de configuração da entrega SeeTree."""
+        import tkinter.messagebox as _mb
+
+        project_str = self._path_var.get().strip()
+        if not project_str:
+            _mb.showerror("SeeTree", "Selecione o diretório do projeto primeiro.")
+            return
+
+        project_path = Path(project_str)
+        if not (project_path / "IMAGENS").exists():
+            _mb.showerror(
+                "SeeTree",
+                f"Pasta IMAGENS não encontrada em:\n{project_path}\n\n"
+                "Certifique-se de que o diretório selecionado é a pasta raiz do projeto.",
+            )
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Organizar Entrega SeeTree")
+        win.configure(bg=BG_DARK)
+        win.resizable(False, False)
+        win.grab_set()
+
+        try:
+            import sys as _sys
+            _base = Path(_sys._MEIPASS) if hasattr(_sys, "_MEIPASS") else Path(__file__).parent.parent.parent
+            _ico = _base / "AVGeoSysIcon.ico"
+            if _ico.exists():
+                win.iconbitmap(str(_ico))
+        except Exception:
+            pass
+
+        pad = {"padx": 10, "pady": 4}
+
+        # Título
+        tk.Label(
+            win, text="Organizar Entrega SeeTree",
+            bg=BG_DARK, fg=FG_TEXT, font=FONT_TITLE, pady=8,
+        ).grid(row=0, column=0, columnspan=3, sticky="w", **pad)
+
+        # KMZ
+        tk.Label(win, text="KMZ do cliente:", bg=BG_DARK, fg=FG_TEXT, font=FONT_UI
+                 ).grid(row=1, column=0, sticky="w", **pad)
+        kmz_saved = self._settings.get("delivery_kmz", "")
+        kmz_var = tk.StringVar(value=kmz_saved)
+        kmz_entry = ttk.Entry(win, textvariable=kmz_var, width=42, font=FONT_UI, state="readonly")
+        kmz_entry.grid(row=1, column=1, sticky="ew", **pad)
+
+        def _browse_kmz():
+            p = filedialog.askopenfilename(
+                title="Selecionar KMZ",
+                filetypes=[("KMZ", "*.kmz"), ("Todos", "*.*")],
+                initialdir=str(project_path.parent) if not kmz_saved else str(Path(kmz_saved).parent),
+            )
+            if p:
+                kmz_var.set(p)
+                self._settings["delivery_kmz"] = p
+                self._save_settings()
+
+        tk.Button(
+            win, text="📁", command=_browse_kmz,
+            bg=BG_PANEL, fg=FG_TEXT, activebackground=BTN_HOVER, activeforeground=FG_TEXT,
+            relief="flat", font=FONT_UI, cursor="hand2",
+        ).grid(row=1, column=2, **pad)
+
+        # Prefixo cliente
+        tk.Label(win, text="Prefixo cliente:", bg=BG_DARK, fg=FG_TEXT, font=FONT_UI
+                 ).grid(row=2, column=0, sticky="w", **pad)
+        client_default = self._settings.get("delivery_client", project_path.parent.name)
+        client_var = tk.StringVar(value=client_default)
+        ttk.Entry(win, textvariable=client_var, width=12, font=FONT_UI).grid(
+            row=2, column=1, sticky="w", **pad)
+
+        # Altura de voo
+        tk.Label(win, text="Altura de voo (m):", bg=BG_DARK, fg=FG_TEXT, font=FONT_UI
+                 ).grid(row=3, column=0, sticky="w", **pad)
+        height_var = tk.StringVar(value=self._settings.get("delivery_height", "55.8"))
+        ttk.Entry(win, textvariable=height_var, width=10, font=FONT_UI).grid(
+            row=3, column=1, sticky="w", **pad)
+
+        # Sensor
+        tk.Label(win, text="Sensor:", bg=BG_DARK, fg=FG_TEXT, font=FONT_UI
+                 ).grid(row=4, column=0, sticky="w", **pad)
+        sensor_var = tk.StringVar(value=self._settings.get("delivery_sensor", "rgb"))
+        ttk.Combobox(
+            win, textvariable=sensor_var,
+            values=["rgb", "ms", "thermal", "lidar"],
+            state="readonly", width=10, font=FONT_UI,
+        ).grid(row=4, column=1, sticky="w", **pad)
+
+        # Botão analisar
+        result_frame = tk.Frame(win, bg=BG_PANEL)
+        result_frame.grid(row=6, column=0, columnspan=3, sticky="ew", padx=10, pady=(4, 0))
+
+        result_text = tk.Text(
+            result_frame, bg=BG_PANEL, fg=FG_TEXT, font=FONT_MONO,
+            width=62, height=14, state="disabled", relief="flat",
+            wrap="word",
+        )
+        result_text.pack(fill="both", expand=True, padx=4, pady=4)
+
+        plan_holder: list = []  # [DeliveryPlan]
+
+        def _analyse():
+            kmz = kmz_var.get().strip()
+            if not kmz or not Path(kmz).exists():
+                _mb.showerror("SeeTree", "Selecione um arquivo KMZ válido.", parent=win)
+                return
+
+            height = height_var.get().strip()
+            client = client_var.get().strip() or project_path.parent.name
+            sensor = sensor_var.get().strip() or "rgb"
+
+            self._settings["delivery_kmz"] = kmz
+            self._settings["delivery_client"] = client
+            self._settings["delivery_height"] = height
+            self._settings["delivery_sensor"] = sensor
+            self._save_settings()
+
+            result_text.configure(state="normal")
+            result_text.delete("1.0", "end")
+            result_text.insert("end", "Analisando...\n")
+            result_text.configure(state="disabled")
+            win.update()
+
+            try:
+                from avgeosys.core.delivery import build_delivery_plan
+                plan = build_delivery_plan(
+                    project_dir=project_path,
+                    kmz_path=Path(kmz),
+                    height=height,
+                    client_prefix=client,
+                    sensor=sensor,
+                )
+                plan_holder.clear()
+                plan_holder.append(plan)
+
+                lines = [
+                    f"Projeto → {plan.new_project_name}",
+                    f"Fazenda: {plan.farm_name}",
+                    "",
+                ]
+                for g in plan.groups:
+                    marker = "🔀" if g.is_merged else "  "
+                    lines.append(f"{marker} {g.folder_name}/  ({len(g.flights)} voo(s))")
+                    for idx, fi in enumerate(g.flights, 1):
+                        sub = f"/{idx}" if g.is_merged else ""
+                        lines.append(f"      {fi.folder.name[-40:]}{sub}")
+
+                if plan.unmatched_flights:
+                    lines.append("")
+                    lines.append("⚠️  Sem talhão:")
+                    for fi in plan.unmatched_flights:
+                        lines.append(f"      {fi.folder.name}")
+
+                result_text.configure(state="normal")
+                result_text.delete("1.0", "end")
+                result_text.insert("end", "\n".join(lines))
+                result_text.configure(state="disabled")
+                btn_exec.configure(state="normal")
+
+            except Exception as exc:
+                logging.getLogger(__name__).error("Erro na análise SeeTree: %s", exc, exc_info=True)
+                result_text.configure(state="normal")
+                result_text.delete("1.0", "end")
+                result_text.insert("end", f"Erro: {exc}")
+                result_text.configure(state="disabled")
+
+        def _execute():
+            if not plan_holder:
+                return
+            plan = plan_holder[0]
+            if plan.unmatched_flights:
+                if not _mb.askyesno(
+                    "SeeTree",
+                    f"{len(plan.unmatched_flights)} voo(s) sem talhão não serão movidos.\n\nContinuar?",
+                    parent=win,
+                ):
+                    return
+
+            msg = (
+                f"Esta operação irá:\n"
+                f"• Mover pastas de voo para estrutura SeeTree\n"
+                f"• Zipar base RINEX na 1ª pasta\n"
+                f"• Remover arquivos .pos, PPK_Results/ e BASE/\n"
+                f"• Renomear pasta raiz para: {plan.new_project_name}\n\n"
+                f"⚠ Operação irreversível. Continuar?"
+            )
+            if not _mb.askokcancel("Confirmar", msg, parent=win):
+                return
+
+            win.destroy()
+
+            def _delivery_task(project_path_ignored: Path) -> None:
+                self.root.after(0, lambda: self._set_status("● Organizando entrega SeeTree...", STATUS_RUN))
+                self._set_progress(5)
+
+                def _progress(done: int, total: int) -> None:
+                    self._set_progress(5 + done / total * 90 if total else 95)
+
+                from avgeosys.core.delivery import execute_delivery
+                execute_delivery(
+                    plan,
+                    cancel_event=self._cancel_event,
+                    progress_callback=_progress,
+                )
+                self._set_progress(100)
+                logging.getLogger(__name__).info(
+                    "Entrega SeeTree concluída: %s", plan.new_project_name
+                )
+                # Abre pasta resultante no Explorer
+                import subprocess as _sp, sys as _sys
+                if _sys.platform == "win32":
+                    new_path = plan.project_dir.parent / plan.new_project_name
+                    dest = new_path if new_path.exists() else plan.project_dir.parent
+                    _sp.Popen(["explorer", str(dest)])
+
+            self._run_task(_delivery_task)
+
+        # Botões de ação
+        btn_frame = tk.Frame(win, bg=BG_DARK)
+        btn_frame.grid(row=5, column=0, columnspan=3, pady=(8, 4))
+
+        tk.Button(
+            btn_frame, text="🔍 Analisar", command=_analyse,
+            bg=ACCENT_GREEN, fg="#ffffff",
+            activebackground=_darken(ACCENT_GREEN), activeforeground="#ffffff",
+            font=FONT_TITLE, padx=20, pady=6, relief="flat", cursor="hand2",
+        ).pack(side="left", padx=(0, 8))
+
+        btn_exec = tk.Button(
+            btn_frame, text="▶ Executar", command=_execute,
+            bg="#1c5430", fg="#ffffff",
+            activebackground="#164025", activeforeground="#ffffff",
+            font=FONT_TITLE, padx=20, pady=6, relief="flat", cursor="hand2",
+            state="disabled",
+        )
+        btn_exec.pack(side="left", padx=(0, 8))
+
+        tk.Button(
+            btn_frame, text="Fechar", command=win.destroy,
+            bg=BG_PANEL, fg=FG_TEXT, activebackground=BTN_HOVER, activeforeground=FG_TEXT,
+            font=FONT_UI, padx=16, pady=6, relief="flat", cursor="hand2",
+        ).pack(side="left")
+
+        win.update_idletasks()
+        px = self.root.winfo_rootx() + self.root.winfo_width() // 2
+        py = self.root.winfo_rooty() + self.root.winfo_height() // 2
+        win.geometry(f"+{px - win.winfo_reqwidth()//2}+{py - win.winfo_reqheight()//2}")
 
     # ------------------------------------------------------------------
     # Per-folder stats popup (item 2)

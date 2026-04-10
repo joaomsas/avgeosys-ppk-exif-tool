@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.0.5",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.5/AVGeoSys_Setup_1.0.5.exe",
-    "notes": "Performance: interpolacao vetorizada, EXIF verify em memoria, workers I/O-bound, RINEX streaming, quality stats sem releitura, mapa com clustering, progress throttle corrigido"
+    "version": "1.1.0",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.1.0/AVGeoSys_Setup_1.1.0.exe",
+    "notes": "Novo: Organizar Entrega SeeTree — agrupa voos por talhao, renomeia pastas e gera estrutura CS_FAZENDA_DATA automaticamente"
   },
   "beta": {
-    "version": "1.0.5",
-    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.0.5/AVGeoSys_Setup_1.0.5.exe",
-    "notes": "Performance: interpolacao vetorizada, EXIF verify em memoria, workers I/O-bound, RINEX streaming, quality stats sem releitura, mapa com clustering, progress throttle corrigido"
+    "version": "1.1.0",
+    "url": "https://github.com/joaomsas/avgeosys-ppk-exif-tool/releases/download/v1.1.0/AVGeoSys_Setup_1.1.0.exe",
+    "notes": "Novo: Organizar Entrega SeeTree — agrupa voos por talhao, renomeia pastas e gera estrutura CS_FAZENDA_DATA automaticamente"
   }
 }
